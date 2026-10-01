@@ -130,3 +130,64 @@ def check_meta(
     settings = platforms.get("facebook")
     version = (settings.api_version if settings else None) or DEFAULT_GRAPH_VERSION
     return check_facebook(credentials, version=version, transport=transport)
+
+
+@dataclass
+class SwapResult:
+    ok: bool
+    changed: bool
+    message: str
+
+
+def swap_for_page_token(
+    credentials: MetaCredentials,
+    platforms: Mapping[str, PlatformSettings],
+    transport: httpx.BaseTransport | None = None,
+) -> SwapResult:
+    """Replace a user token in the file with the Page's own token, fetched from Facebook.
+
+    Posting needs the Page token; people tend to paste the user token they generated it from.
+    The user token is kept as `user_access_token`, so this is reversible and repeatable.
+    """
+    settings = platforms.get("facebook")
+    version = (settings.api_version if settings else None) or DEFAULT_GRAPH_VERSION
+    section = credentials.section("facebook")
+    page_id = str(section.get("page_id") or "").strip()
+    user_token = str(section.get("access_token") or "").strip()
+    if not page_id or not user_token:
+        return SwapResult(
+            False, False, "facebook.page_id and facebook.access_token must both be set"
+        )
+
+    graph = GraphClient(
+        version=version, tokens=SectionTokenProvider(credentials, "facebook"), transport=transport
+    )
+    try:
+        me = graph.get("me", {"fields": "id,name"})
+        if str(me.get("id")) == page_id:
+            return SwapResult(True, False, "this is already the Page's own token; nothing to do")
+        accounts = graph.get("me/accounts", {"fields": "id,name,access_token", "limit": "200"})
+    except PublishingError as exc:
+        return SwapResult(False, False, f"Facebook refused the token: {exc}")
+
+    pages = accounts.get("data") or []
+    match = next((p for p in pages if str(p.get("id")) == page_id), None)
+    if match is None or not match.get("access_token"):
+        seen = ", ".join(repr(p.get("name")) for p in pages) or "no Pages at all"
+        return SwapResult(
+            False,
+            False,
+            f"this token can see {seen}, but not the Page with id {page_id}. The account that made "
+            "it must be an admin of the Page, and the token needs pages_show_list. If the Page "
+            "belongs to a Business portfolio, the Explorer may also need business_management.",
+        )
+    credentials.update_section(
+        "facebook",
+        {"access_token": match["access_token"], "user_access_token": user_token},
+    )
+    return SwapResult(
+        True,
+        True,
+        f"replaced the user token with the Page token for {match.get('name')!r}. Your user token "
+        "is kept in the file as facebook.user_access_token",
+    )

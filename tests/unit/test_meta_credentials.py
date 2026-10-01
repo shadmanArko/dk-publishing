@@ -265,3 +265,99 @@ def test_a_users_token_is_recognised_and_the_fix_is_spelled_out(tmp_path: Path) 
 
 def test_a_real_page_token_passes_that_check(tmp_path: Path) -> None:
     assert not [p for p in run(tmp_path).problems if "not the Page's own token" in p]
+
+
+# --- `dk meta page-token`: swapping the user token for the Page's own ---------------------------
+
+
+def user_file(tmp_path: Path, fake: FakeGraph, **extra: object) -> MetaCredentials:
+    return make(
+        tmp_path,
+        facebook={"page_id": "PAGE", "access_token": fake.user_token},
+        instagram={"account_id": "IG1", "access_token": ""},
+        **extra,
+    )
+
+
+def swap(credentials: MetaCredentials, fake: FakeGraph):  # type: ignore[no-untyped-def]
+    from dk_publishing.adapters.platforms.meta_check import swap_for_page_token
+
+    return swap_for_page_token(
+        credentials, load_platforms(DEFAULT_PLATFORMS_CONFIG), fake.transport()
+    )
+
+
+def test_the_users_token_is_replaced_by_the_pages_and_kept_for_later(tmp_path: Path) -> None:
+    fake = FakeGraph()
+    credentials = user_file(tmp_path, fake)
+    result = swap(credentials, fake)
+
+    assert result.ok and result.changed and "Page token for 'Dhaka Kacchi'" in result.message
+    section = json.loads(credentials.path.read_text())["facebook"]
+    assert section["access_token"] == TOKEN and section["user_access_token"] == fake.user_token
+    assert section["page_id"] == "PAGE"
+
+
+def test_after_the_swap_the_check_is_green(tmp_path: Path) -> None:
+    fake = FakeGraph()
+    credentials = user_file(tmp_path, fake)
+    before = check_facebook(credentials, version="v25.0", transport=fake.transport())
+    assert any("not the Page's own token" in p for p in before.problems)  # it failed before
+
+    swap(credentials, fake)
+    after = check_facebook(credentials, version="v25.0", transport=fake.transport())
+    assert after.problems == [] and any("Dhaka Kacchi" in line for line in after.lines)
+
+
+def test_the_rest_of_the_file_and_its_privacy_survive(tmp_path: Path) -> None:
+    fake = FakeGraph()
+    credentials = user_file(tmp_path, fake)
+    credentials.path.chmod(0o600)
+    swap(credentials, fake)
+    data = json.loads(credentials.path.read_text())
+    assert data["app_secret"] == "APPSECRET" and data["instagram"] == {
+        "account_id": "IG1",
+        "access_token": "",
+    }
+    assert stat.S_IMODE(credentials.path.stat().st_mode) == 0o600
+    assert not list(tmp_path.glob("*.tmp"))  # no leftover temporary file
+
+
+def test_running_it_again_does_nothing(tmp_path: Path) -> None:
+    fake = FakeGraph()
+    credentials = user_file(tmp_path, fake)
+    swap(credentials, fake)
+    again = swap(credentials, fake)
+    assert again.ok and not again.changed and "already the Page's own token" in again.message
+    assert (
+        json.loads(credentials.path.read_text())["facebook"]["user_access_token"] == fake.user_token
+    )
+
+
+def test_a_page_the_person_does_not_manage_is_explained_without_guessing(tmp_path: Path) -> None:
+    fake = FakeGraph()
+    fake.hide_pages = True
+    credentials = user_file(tmp_path, fake)
+    result = swap(credentials, fake)
+    assert not result.ok and not result.changed
+    assert "no Pages at all" in result.message and "pages_show_list" in result.message
+    assert json.loads(credentials.path.read_text())["facebook"]["access_token"] == fake.user_token
+
+
+def test_a_rejected_token_is_reported_not_swapped(tmp_path: Path) -> None:
+    fake = FakeGraph()
+    credentials = make(tmp_path, facebook={"page_id": "PAGE", "access_token": "garbage"})
+    result = swap(credentials, fake)
+    assert not result.ok and "Facebook refused the token" in result.message
+
+
+def test_missing_pieces_are_named(tmp_path: Path) -> None:
+    fake = FakeGraph()
+    result = swap(make(tmp_path, facebook={"page_id": "PAGE", "access_token": ""}), fake)
+    assert not result.ok and "must both be set" in result.message
+
+
+def test_no_token_ever_appears_in_the_message(tmp_path: Path) -> None:
+    fake = FakeGraph()
+    result = swap(user_file(tmp_path, fake), fake)
+    assert TOKEN not in result.message and fake.user_token not in result.message

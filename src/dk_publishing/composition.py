@@ -20,7 +20,12 @@ from dk_publishing.adapters.persistence.sync import new_external_id
 from dk_publishing.adapters.persistence.unit_of_work import PostgresUnitOfWork
 from dk_publishing.adapters.platforms.dry_run import DryRunPublisher, PostgresLedger
 from dk_publishing.adapters.platforms.live import build_live_publisher
-from dk_publishing.adapters.platforms.meta_check import MetaReport, check_meta
+from dk_publishing.adapters.platforms.meta_check import (
+    MetaReport,
+    SwapResult,
+    check_meta,
+    swap_for_page_token,
+)
 from dk_publishing.adapters.platforms.meta_credentials import (
     MetaCredentials,
     write_template_from_env,
@@ -259,3 +264,8 @@ def meta_init(path: Path, env: Mapping[str, str]) -> bool:
 def meta_check(path: Path, platforms_config: Path = DEFAULT_PLATFORMS_CONFIG) -> MetaReport:
     """Ask Meta what the credentials file's tokens can do. Never posts."""
     return check_meta(MetaCredentials(path), load_platforms(platforms_config))
+
+
+def meta_page_token(path: Path, platforms_config: Path = DEFAULT_PLATFORMS_CONFIG) -> SwapResult:
+    """Swap the user token in the credentials file for the Page's own token."""
+    return swap_for_page_token(MetaCredentials(path), load_platforms(platforms_config))

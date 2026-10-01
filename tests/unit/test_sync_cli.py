@@ -176,3 +176,23 @@ def test_meta_check_without_a_file_explains(
     monkeypatch.setenv("META_CREDENTIALS_FILE", str(tmp_path / "missing.json"))
     assert cli.main(["meta", "check"]) == 1
     assert "cannot read the Meta credentials file" in capsys.readouterr().err
+
+
+def test_meta_page_token_reports_and_points_to_the_check(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    from dk_publishing.adapters.platforms.meta_check import SwapResult
+
+    monkeypatch.setenv("META_CREDENTIALS_FILE", str(tmp_path / "meta.json"))
+    monkeypatch.setattr(
+        composition, "meta_page_token", lambda path: SwapResult(True, True, "replaced it")
+    )
+    assert cli.main(["meta", "page-token"]) == 0
+    out = capsys.readouterr().out
+    assert "[ok]   replaced it" in out and "make meta-check" in out
+
+    monkeypatch.setattr(
+        composition, "meta_page_token", lambda path: SwapResult(False, False, "no Pages")
+    )
+    assert cli.main(["meta", "page-token"]) == 1
+    assert "[FAIL]   no Pages" in capsys.readouterr().out

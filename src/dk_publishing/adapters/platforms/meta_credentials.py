@@ -43,6 +43,21 @@ class MetaCredentials:
             raise ConfigError(f"{self.path} has no '{name}' section; run `dk meta init`")
         return section
 
+    def update_section(self, name: str, changes: Mapping[str, Any]) -> None:
+        """Change fields of one section and write the file back atomically, keeping it private.
+        Everything else in the file is preserved."""
+        data = self._load()
+        section = data.get(name)
+        if not isinstance(section, dict):
+            raise ConfigError(f"{self.path} has no '{name}' section; run `dk meta init`")
+        section.update(changes)
+        temporary = self.path.with_name(self.path.name + ".tmp")
+        descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(descriptor, "w") as handle:
+            json.dump(data, handle, indent=2)
+            handle.write("\n")
+        os.replace(temporary, self.path)  # the old file is never left half-written
+
     def value(self, key: str) -> str:
         return str(self._load().get(key) or "").strip()
 

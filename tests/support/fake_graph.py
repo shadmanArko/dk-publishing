@@ -50,6 +50,8 @@ class FakeGraph:
         self.hosts: list[str] = []
         self.next_error: Callable[[httpx.Request], httpx.Response | BaseException] | None = None
         self.lose_next_response = False
+        self.hide_pages = False
+        self.user_token = "EAAB-user-token-of-a-person"
         self.token_owner: tuple[str, str] | None = None  # (id, name) when it is not the Page
         self.name = "Dhaka Kacchi"
         self.app_token = "936388502452682|APPSECRET"
@@ -82,6 +84,8 @@ class FakeGraph:
                 if query.get("access_token") != self.app_token:
                     return graph_error(400, 190, "Invalid app credentials.")
                 return httpx.Response(200, json={"data": self.debug})
+            if query.get("access_token") == self.user_token:
+                return self._get_as_user(path, query)
             if query.get("access_token") != TOKEN:
                 return graph_error(400, 190, "Invalid OAuth access token.", 467)
             return self._get(path, query)
@@ -150,6 +154,20 @@ class FakeGraph:
             )  # fmt: skip
             return httpx.Response(200, json={"id": f"vid{n}"})
         return graph_error(400, 100, f"Unknown edge {edge}")
+
+    def _get_as_user(self, path: str, query: dict[str, str]) -> httpx.Response:
+        """A person's token: it can name itself, list the Pages it manages, and read a Page's
+        public name, but anything that needs the Page's own token is refused (#210)."""
+        if path == "me":
+            return httpx.Response(200, json={"id": "10001", "name": "Shadman Arko"})
+        if path == "me/accounts":
+            pages = [{"id": self.page, "name": self.name, "access_token": TOKEN}]
+            return httpx.Response(200, json={"data": [] if self.hide_pages else pages})
+        if path == self.page:
+            return httpx.Response(200, json={"id": self.page, "name": self.name})
+        return graph_error(
+            400, 210, "(#210) A page access token is required to request this resource."
+        )
 
     def _get(self, path: str, query: dict[str, str]) -> httpx.Response:
         if "/" in path:

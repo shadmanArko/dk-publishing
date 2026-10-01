@@ -42,6 +42,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     meta_commands = meta.add_subparsers(dest="meta_command", required=True)
     meta_commands.add_parser("init", help="create the one-file credentials template")
     meta_commands.add_parser("check", help="test the tokens without posting anything")
+    meta_commands.add_parser(
+        "page-token", help="swap the user token in the file for the Page's own token"
+    )
     account = commands.add_parser("account", help="dry-run accounts")
     account_commands = account.add_subparsers(dest="account_command", required=True)
     account_commands.add_parser("list", help="list accounts")
@@ -276,6 +279,16 @@ def _meta(command: str) -> int:
         if not os.environ.get("META_CREDENTIALS_FILE", "").strip():
             print(f"Also add this line to .env:  META_CREDENTIALS_FILE={path}")
         return 0
+    if command == "page-token":
+        try:
+            result = composition.meta_page_token(path)
+        except ConfigError as exc:
+            print(f"[FAIL] {exc}", file=sys.stderr)
+            return 1
+        print(f"[{'ok' if result.ok else 'FAIL'}]   {result.message}")
+        if result.changed:
+            print("Now run: make meta-check")
+        return 0 if result.ok else 1
     try:
         report = composition.meta_check(path)
     except ConfigError as exc:
