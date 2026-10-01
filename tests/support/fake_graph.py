@@ -50,6 +50,7 @@ class FakeGraph:
         self.hosts: list[str] = []
         self.next_error: Callable[[httpx.Request], httpx.Response | BaseException] | None = None
         self.lose_next_response = False
+        self.token_owner: tuple[str, str] | None = None  # (id, name) when it is not the Page
         self.name = "Dhaka Kacchi"
         self.app_token = "936388502452682|APPSECRET"
         self.debug: dict[str, Any] = {
@@ -153,12 +154,24 @@ class FakeGraph:
     def _get(self, path: str, query: dict[str, str]) -> httpx.Response:
         if "/" in path:
             _, edge = path.split("/", 1)
+            if edge == "feed":
+                # What a real token without the extra feature gets. Reads must use published_posts.
+                return graph_error(
+                    403,
+                    10,
+                    "(#10) This endpoint requires the 'pages_read_engagement' permission or the "
+                    "'Page Public Content Access' feature.",
+                )
+            edge = {"published_posts": "feed"}.get(edge, edge)
             visible = [
                 i
                 for i in self.items.get(edge, [])
                 if i.get("is_published", i.get("published", True))
             ]  # a post still being held is not on the feed
             return httpx.Response(200, json={"data": [_public(i) for i in reversed(visible)]})
+        if path == "me":
+            owner_id, owner_name = self.token_owner or (self.page, self.name)
+            return httpx.Response(200, json={"id": owner_id, "name": owner_name})
         if path == self.page:
             return httpx.Response(200, json={"id": self.page, "name": self.name})
         for items in self.items.values():

@@ -195,12 +195,16 @@ class FacebookPublisher:
             return self._scheduled_is_live(str(handle["scheduled_id"]), fmt)
         message = str(snapshot.content.get("caption") or "").strip()
         since = snapshot.publish_at - LOOKBACK
-        edge, field = ("videos", "description") if fmt == "video" else ("feed", "message")
+        edge, field = (
+            ("videos", "description") if fmt == "video" else ("published_posts", "message")
+        )
         if fmt == "photo":
             edge, field = "photos", "name"
         params = {"fields": f"id,{field},created_time,permalink_url", "limit": "25"}
         if edge == "photos":
             params["type"] = "uploaded"
+        # Read with `published_posts`, never `feed`: `/feed` reads need an extra permission or
+        # feature (error #10) that `published_posts` does not. Creating a post still POSTs to /feed.
         for item in self._graph.get(f"{self._page}/{edge}", params).get("data", []):
             if str(item.get(field) or "").strip() != message:
                 continue

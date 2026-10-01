@@ -152,7 +152,7 @@ def test_a_good_token_is_confirmed_by_name_and_permissions(tmp_path: Path) -> No
     report = run(tmp_path, fake)
     text = "\n".join(report.lines)
     assert report.problems == []
-    assert "the Page 'Dhaka Kacchi' (id PAGE)" in text and "read the Page's posts" in text
+    assert "the Page 'Dhaka Kacchi' (id PAGE)" in text and "read the Page's published posts" in text
     assert (
         "pages_manage_posts" in text and "expires in 59 days" in text
     ) or "expires in 60 days" in text
@@ -209,7 +209,7 @@ def test_check_meta_uses_the_configured_api_version(tmp_path: Path) -> None:
     assert all(r.url.path.startswith("/v25.0/") for r in fake.requests)
 
 
-def test_a_token_that_cannot_read_the_feed_still_gets_its_permissions_listed(
+def test_a_token_that_cannot_read_published_posts_still_gets_its_permissions_listed(
     tmp_path: Path,
 ) -> None:
     """The real first-token mistake: valid for the Page, but generated without read permission."""
@@ -219,8 +219,8 @@ def test_a_token_that_cannot_read_the_feed_still_gets_its_permissions_listed(
     fake.debug["scopes"] = ["pages_show_list", "pages_manage_posts"]
     real = fake.handle
 
-    def no_feed(request: httpx.Request) -> httpx.Response:
-        if request.url.path.endswith("/feed"):
+    def no_posts(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/published_posts"):
             return httpx.Response(
                 403,
                 json={
@@ -233,13 +233,35 @@ def test_a_token_that_cannot_read_the_feed_still_gets_its_permissions_listed(
         return real(request)
 
     credentials = make(tmp_path)
-    report = check_facebook(credentials, version="v25.0", transport=httpx.MockTransport(no_feed))
+    report = check_facebook(credentials, version="v25.0", transport=httpx.MockTransport(no_posts))
     text = "\n".join(report.lines)
     assert "the token works for the Page 'Dhaka Kacchi'" in text
     assert any(
-        "cannot read the Page's posts" in p and "pages_read_engagement" in p
+        "cannot read the Page's published posts" in p and "pages_read_engagement" in p
         for p in report.problems
     )
     assert any(
         "lacks permission: pages_read_engagement" in p for p in report.problems
     )  # still listed
+
+
+def test_the_check_reads_published_posts_and_never_the_feed(tmp_path: Path) -> None:
+    """/feed reads fail with error #10 on tokens that /published_posts accepts."""
+    fake = FakeGraph()
+    report = run(tmp_path, fake)
+    reads = [r.url.path for r in fake.requests if r.method == "GET"]
+    assert "/v25.0/PAGE/published_posts" in reads and not [p for p in reads if p.endswith("/feed")]
+    assert report.problems == []
+
+
+def test_a_users_token_is_recognised_and_the_fix_is_spelled_out(tmp_path: Path) -> None:
+    """The commonest mistake: pasting the long-lived USER token instead of the Page's own."""
+    fake = FakeGraph()
+    fake.token_owner = ("10001", "Shadman Arko")
+    report = run(tmp_path, fake)
+    [problem] = [p for p in report.problems if "not the Page's own token" in p]
+    assert "belongs to 'Shadman Arko'" in problem and "me/accounts" in problem
+
+
+def test_a_real_page_token_passes_that_check(tmp_path: Path) -> None:
+    assert not [p for p in run(tmp_path).problems if "not the Page's own token" in p]

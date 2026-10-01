@@ -134,7 +134,7 @@ def test_the_token_travels_in_the_body_of_a_write_and_the_query_of_a_read() -> N
     fake = FakeGraph()
     api = client(fake)
     api.post("PAGE/feed", {"message": "hi"})
-    api.get("PAGE/feed")
+    api.get("PAGE/published_posts")
     post, get = fake.requests
     assert TOKEN in post.content.decode() and TOKEN not in str(post.url)
     assert f"access_token={TOKEN}" in str(get.url)
@@ -143,7 +143,7 @@ def test_the_token_travels_in_the_body_of_a_write_and_the_query_of_a_read() -> N
 def test_the_version_is_in_the_path_and_videos_use_the_video_host() -> None:
     fake = FakeGraph()
     api = client(fake)
-    api.get("PAGE/feed")
+    api.get("PAGE/published_posts")
     assert fake.requests[0].url.path.startswith("/v25.0/")
     assert fake.hosts == ["graph.facebook.com"]
 
@@ -171,7 +171,7 @@ def test_a_lost_answer_to_a_write_is_uncertain_but_to_a_read_is_just_retryable(
         client(fake).post("PAGE/feed", {"message": "m"})
     fake.fail_next(error)
     with pytest.raises(Retryable):
-        client(fake).get("PAGE/feed")
+        client(fake).get("PAGE/published_posts")
 
 
 def test_server_errors_on_a_write_are_uncertain() -> None:

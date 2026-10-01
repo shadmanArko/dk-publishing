@@ -265,3 +265,22 @@ def test_when_facebook_cannot_answer_find_live_raises_instead_of_claiming_not_li
     fake.fail_next(outcome)
     with pytest.raises(expected):
         publisher.find_live(snap("post"), None)
+
+
+def test_confirming_a_post_reads_published_posts_never_the_feed() -> None:
+    """Reading /feed needs an extra permission (error #10); posting to /feed does not."""
+    publisher, fake = build()
+    post_text(publisher)
+    publisher.find_live(snap("post"), None)
+    gets = [r.url.path for r in fake.requests if r.method == "GET"]
+    assert "/v25.0/PAGE/published_posts" in gets
+    assert not [p for p in gets if p.endswith("/feed")]
+    assert [r.url.path for r in fake.requests if r.method == "POST"] == ["/v25.0/PAGE/feed"]
+
+
+def test_a_token_that_may_not_read_the_feed_can_still_confirm_a_post() -> None:
+    publisher, _ = build()
+    post_text(publisher)
+    # The fake refuses /feed reads exactly like the real Page does for this token.
+    found = publisher.find_live(snap("post"), None)
+    assert found is not None and found.external_id == "PAGE_1"
