@@ -38,6 +38,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     sync.add_argument(
         "--allow-cancellations", action="store_true", help="skip the bulk-cancel guard"
     )
+    meta = commands.add_parser("meta", help="the one-file Meta credentials")
+    meta_commands = meta.add_subparsers(dest="meta_command", required=True)
+    meta_commands.add_parser("init", help="create the one-file credentials template")
+    meta_commands.add_parser("check", help="test the tokens without posting anything")
     account = commands.add_parser("account", help="dry-run accounts")
     account_commands = account.add_subparsers(dest="account_command", required=True)
     account_commands.add_parser("list", help="list accounts")
@@ -65,6 +69,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _sync(allow_cancellations=args.allow_cancellations)
     if args.command == "account":
         return _account(args)
+    if args.command == "meta":
+        return _meta(args.meta_command)
 
     database_url = os.environ.get("DATABASE_URL", "").strip()
     if not database_url:
@@ -256,3 +262,30 @@ def _sample() -> int:
         return 1
     print("\n".join(f"[did] {line}" for line in done))
     return 0
+
+
+def _meta(command: str) -> int:
+    path = Path(os.environ.get("META_CREDENTIALS_FILE", "").strip() or meta_default()).expanduser()
+    if command == "init":
+        created = composition.meta_init(path, os.environ)
+        if not created:
+            print(f"{path} already exists; left it alone")
+            return 0
+        print(f"[did] created {path} (owner-only permissions, outside the repo)")
+        print("Open it, paste each token between the quotes, then run: make meta-check")
+        if not os.environ.get("META_CREDENTIALS_FILE", "").strip():
+            print(f"Also add this line to .env:  META_CREDENTIALS_FILE={path}")
+        return 0
+    try:
+        report = composition.meta_check(path)
+    except ConfigError as exc:
+        print(f"[FAIL] {exc}", file=sys.stderr)
+        return 1
+    print("\n".join(report.lines))
+    return 1 if report.problems else 0
+
+
+def meta_default() -> str:
+    from dk_publishing.adapters.platforms.meta_credentials import DEFAULT_PATH
+
+    return str(DEFAULT_PATH)

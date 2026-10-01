@@ -17,7 +17,7 @@ test:  ## pytest with coverage gate
 	uv run pytest --cov --cov-report=term-missing
 check: lint typecheck arch test  ## everything CI runs
 
-.PHONY: db-up db-down migrate dagster-dev seed-rehearsal check-google sheet-init sheet-init-dry
+.PHONY: db-up db-down migrate dagster-dev seed-rehearsal check-google sheet-init sheet-init-dry meta-init meta-check
 db-up:  ## start the local dev Postgres (Docker) on :5433
 	docker compose -f compose.dev.yaml up -d --wait
 db-down:  ## stop it (data kept)
@@ -35,3 +35,7 @@ sheet-init-dry:  ## show what `sheet-init` would change; writes nothing
 	uv run --env-file .env dk sheet init --dry-run
 sheet-init:  ## create/repair the Google Sheet layout (never overwrites data)
 	uv run --env-file .env dk sheet init
+meta-init:  ## create the one-file Meta credentials template (no secrets in it)
+	uv run --env-file .env dk meta init
+meta-check:  ## test the Meta tokens without posting anything
+	uv run --env-file .env dk meta check

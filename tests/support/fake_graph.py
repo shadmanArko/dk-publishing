@@ -50,6 +50,12 @@ class FakeGraph:
         self.hosts: list[str] = []
         self.next_error: Callable[[httpx.Request], httpx.Response | BaseException] | None = None
         self.lose_next_response = False
+        self.name = "Dhaka Kacchi"
+        self.app_token = "936388502452682|APPSECRET"
+        self.debug: dict[str, Any] = {
+            "type": "PAGE", "is_valid": True, "expires_at": 0,
+            "scopes": ["pages_show_list", "pages_read_engagement", "pages_manage_posts"],
+        }  # fmt: skip
         self._n = 0
 
     def transport(self) -> httpx.MockTransport:
@@ -69,6 +75,10 @@ class FakeGraph:
         path = urlparse(str(request.url)).path.split("/", 2)[2]  # drop /v25.0/
         if request.method == "GET":
             query = {k: v[0] for k, v in parse_qs(request.url.query.decode()).items()}
+            if path == "debug_token":
+                if query.get("access_token") != self.app_token:
+                    return graph_error(400, 190, "Invalid app credentials.")
+                return httpx.Response(200, json={"data": self.debug})
             if query.get("access_token") != TOKEN:
                 return graph_error(400, 190, "Invalid OAuth access token.", 467)
             return self._get(path, query)
@@ -124,6 +134,8 @@ class FakeGraph:
         if "/" in path:
             _, edge = path.split("/", 1)
             return httpx.Response(200, json={"data": list(reversed(self.items.get(edge, [])))})
+        if path == self.page:
+            return httpx.Response(200, json={"id": self.page, "name": self.name})
         for items in self.items.values():
             for item in items:
                 if item["id"] == path:

@@ -21,6 +21,11 @@ from dk_publishing.adapters.persistence.sync import new_external_id
 from dk_publishing.adapters.persistence.unit_of_work import PostgresUnitOfWork
 from dk_publishing.adapters.platforms.dry_run import DryRunPublisher, PostgresLedger
 from dk_publishing.adapters.platforms.live import build_live_publisher
+from dk_publishing.adapters.platforms.meta_check import MetaReport, check_meta
+from dk_publishing.adapters.platforms.meta_credentials import (
+    MetaCredentials,
+    write_template_from_env,
+)
 from dk_publishing.adapters.platforms.registry import StaticPublisherRegistry
 from dk_publishing.adapters.sheets.gateway import GoogleSheetGateway
 from dk_publishing.adapters.sheets.google_access import (
@@ -245,3 +250,13 @@ def _sample_cells(cells: Mapping[str, Any]) -> dict[str, Any]:
         else:
             out[name] = value
     return out
+
+
+def meta_init(path: Path, env: Mapping[str, str]) -> bool:
+    """Create the one-file Meta credentials template (no secrets in it). False if it exists."""
+    return write_template_from_env(path, env)
+
+
+def meta_check(path: Path, platforms_config: Path = DEFAULT_PLATFORMS_CONFIG) -> MetaReport:
+    """Ask Meta what the credentials file's tokens can do. Never posts."""
+    return check_meta(MetaCredentials(path), load_platforms(platforms_config))

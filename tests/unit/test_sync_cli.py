@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from dk_publishing import composition
@@ -141,3 +143,36 @@ def test_sample_reports_what_it_did(
     )
     assert cli.main(["sheet", "sample"]) == 0
     assert "[did] added DK-2026-0412" in capsys.readouterr().out
+
+
+def test_meta_init_creates_the_template_once(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    monkeypatch.setenv("META_CREDENTIALS_FILE", str(tmp_path / "meta.json"))
+    assert cli.main(["meta", "init"]) == 0
+    assert "[did] created" in capsys.readouterr().out and (tmp_path / "meta.json").exists()
+    assert cli.main(["meta", "init"]) == 0
+    assert "already exists; left it alone" in capsys.readouterr().out
+
+
+def test_meta_check_prints_the_report_and_fails_on_problems(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    from dk_publishing.adapters.platforms.meta_check import MetaReport
+
+    monkeypatch.setenv("META_CREDENTIALS_FILE", str(tmp_path / "meta.json"))
+    report = MetaReport()
+    report.ok("the token works")
+    monkeypatch.setattr(composition, "meta_check", lambda path: report)
+    assert cli.main(["meta", "check"]) == 0
+    assert "[ok]   the token works" in capsys.readouterr().out
+    report.fail("lacks permission")
+    assert cli.main(["meta", "check"]) == 1
+
+
+def test_meta_check_without_a_file_explains(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    monkeypatch.setenv("META_CREDENTIALS_FILE", str(tmp_path / "missing.json"))
+    assert cli.main(["meta", "check"]) == 1
+    assert "cannot read the Meta credentials file" in capsys.readouterr().err

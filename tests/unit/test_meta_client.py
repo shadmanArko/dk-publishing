@@ -101,13 +101,23 @@ def test_a_body_that_is_not_json_still_maps() -> None:
     [
         "GET https://graph.facebook.com/v25.0/me?access_token=EAAB123abc&fields=id failed",
         'body {"x": 1} access_token=EAAB123abc',
-        "Authorization: Bearer EAAB123abc.def-ghi",
+        "Authorization: Bearer EAAB123abcDEFghi456jklMNO789pqr",
+        "the token EAAB123abcDEFghi456jklMNO789pqr was rejected",
         "client_secret=s3cr3t",
     ],
 )
 def test_tokens_never_survive_redaction(text: str) -> None:
     cleaned = redact(text)
     assert "EAAB123abc" not in cleaned and "s3cr3t" not in cleaned and "[redacted]" in cleaned
+
+
+def test_facebooks_own_wording_is_left_readable() -> None:
+    """The commonest error message contains the word OAuth; it must not be mistaken for a token."""
+    for text in (
+        "Invalid OAuth access token.",
+        "Error validating access token: Session has expired",
+    ):
+        assert redact(text) == text
 
 
 def test_an_error_message_that_echoes_the_token_is_redacted() -> None:

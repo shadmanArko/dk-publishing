@@ -35,11 +35,13 @@ PERMISSION_CODES = {10, *range(200, 300)}
 TRANSIENT_CODES = {1, 2}  # "unknown error" / "service temporarily unavailable"
 
 _SECRET = re.compile(r"(access_token|client_secret)=[^&\s\"']+", re.IGNORECASE)
-_BEARER = re.compile(r"(Bearer|OAuth)\s+[A-Za-z0-9._\-]+")
+_BEARER = re.compile(r"(Bearer|OAuth)\s+[A-Za-z0-9._\-]{20,}")  # real tokens are long
+_BARE = re.compile(r"\bEAA[A-Za-z0-9]{20,}")  # Meta access tokens start with EAA
 
 
 def redact(text: str) -> str:
     """Remove anything shaped like a token before text reaches a log or the Sheet."""
+    text = _BARE.sub("[redacted]", text)
     return _BEARER.sub(r"\1 [redacted]", _SECRET.sub(r"\1=[redacted]", text))
 
 
