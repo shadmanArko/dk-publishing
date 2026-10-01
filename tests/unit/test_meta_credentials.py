@@ -207,3 +207,39 @@ def test_check_meta_uses_the_configured_api_version(tmp_path: Path) -> None:
     fake = FakeGraph()
     check_meta(make(tmp_path), load_platforms(DEFAULT_PLATFORMS_CONFIG), fake.transport())
     assert all(r.url.path.startswith("/v25.0/") for r in fake.requests)
+
+
+def test_a_token_that_cannot_read_the_feed_still_gets_its_permissions_listed(
+    tmp_path: Path,
+) -> None:
+    """The real first-token mistake: valid for the Page, but generated without read permission."""
+    import httpx
+
+    fake = FakeGraph()
+    fake.debug["scopes"] = ["pages_show_list", "pages_manage_posts"]
+    real = fake.handle
+
+    def no_feed(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/feed"):
+            return httpx.Response(
+                403,
+                json={
+                    "error": {
+                        "code": 10,
+                        "message": "(#10) This endpoint requires the 'pages_read_engagement' permission",
+                    }
+                },
+            )
+        return real(request)
+
+    credentials = make(tmp_path)
+    report = check_facebook(credentials, version="v25.0", transport=httpx.MockTransport(no_feed))
+    text = "\n".join(report.lines)
+    assert "the token works for the Page 'Dhaka Kacchi'" in text
+    assert any(
+        "cannot read the Page's posts" in p and "pages_read_engagement" in p
+        for p in report.problems
+    )
+    assert any(
+        "lacks permission: pages_read_engagement" in p for p in report.problems
+    )  # still listed

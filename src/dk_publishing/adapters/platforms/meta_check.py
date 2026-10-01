@@ -60,11 +60,18 @@ def check_facebook(
     try:
         page = graph.get(page_id, {"fields": "id,name"})
         report.ok(f"the token works for the Page {page.get('name')!r} (id {page.get('id')})")
-        graph.get(f"{page_id}/feed", {"limit": "1"})
-        report.ok("it can read the Page's posts (needed to confirm a post went out)")
     except PublishingError as exc:
         report.fail(f"Facebook refused the token: {exc}")
         return report
+    try:
+        graph.get(f"{page_id}/feed", {"limit": "1"})
+        report.ok("it can read the Page's posts (needed to confirm a post went out)")
+    except PublishingError as exc:
+        # Not fatal for the rest of the check: carry on so the permissions get listed below.
+        report.fail(
+            "it cannot read the Page's posts, which is how a post is confirmed after a lost "
+            f"answer. Add the pages_read_engagement permission. Facebook said: {exc}"
+        )
 
     app_id, secret = credentials.value("app_id"), credentials.value("app_secret")
     if not (app_id and secret):
