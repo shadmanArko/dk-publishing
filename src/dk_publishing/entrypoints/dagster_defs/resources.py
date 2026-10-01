@@ -5,7 +5,7 @@ from pathlib import Path
 from dagster import ConfigurableResource
 
 from dk_publishing import composition
-from dk_publishing.application.services import Services
+from dk_publishing.application.services import Services, SyncServices
 
 
 class ServicesResource(ConfigurableResource):  # type: ignore[type-arg]
@@ -16,3 +16,25 @@ class ServicesResource(ConfigurableResource):  # type: ignore[type-arg]
 
     def services(self) -> Services:
         return composition.build_services(self.database_url, Path(self.platforms_config))
+
+
+class SheetSyncResource(ConfigurableResource):  # type: ignore[type-arg]
+    """Google credentials and IDs, from the environment, for the Sheet sync."""
+
+    database_url: str
+    credentials_path: str
+    sheet_id: str
+    folder_id: str
+
+    def services(self) -> SyncServices:
+        return composition.build_sync_services(
+            self.database_url,
+            Path(self.credentials_path).expanduser(),
+            self.sheet_id,
+            self.folder_id,
+        )
+
+    def modified_at(self) -> str:
+        return composition.sheet_modified_at(
+            Path(self.credentials_path).expanduser(), self.sheet_id
+        )

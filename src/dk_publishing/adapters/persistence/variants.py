@@ -40,15 +40,16 @@ class PostgresVariantRepository:
     def __init__(self, conn: Conn) -> None:
         self._conn = conn
 
-    def add(self, variant: Variant) -> None:
+    def add(self, variant: Variant, *, source_hash: str | None = None) -> None:
         if variant.status is not VariantStatus.DRAFT or variant.version != 0:
             raise ValueError("a new variant must be a fresh draft (version 0)")
         if variant.snapshot_hash is not None:
             raise ValueError("a new variant cannot carry a snapshot")
         self._conn.execute(
             """INSERT INTO publishing.variants
-                   (id, tenant_id, post_id, platform, account_id, publish_at, status, version)
-               VALUES (%s::uuid, %s, %s::uuid, %s, %s::uuid, %s, %s, %s)""",
+                   (id, tenant_id, post_id, platform, account_id, publish_at, status, version,
+                    source_hash)
+               VALUES (%s::uuid, %s, %s::uuid, %s, %s::uuid, %s, %s, %s, %s)""",
             (
                 variant.id,
                 variant.tenant_id,
@@ -58,6 +59,7 @@ class PostgresVariantRepository:
                 variant.publish_at,
                 variant.status.value,
                 variant.version,
+                source_hash,
             ),
         )
 
@@ -118,6 +120,7 @@ class PostgresVariantRepository:
         snapshot: Mapping[str, Any] | None = None,
         handle: Handle | None = None,
         live: LivePost | None = None,
+        source_hash: str | None = None,
     ) -> bool:
         _check_consistent(old, new, event, snapshot)
 
@@ -144,6 +147,9 @@ class PostgresVariantRepository:
         elif snapshot is not None:
             sets.append("snapshot = %s")
             params.append(Jsonb(snapshot))
+        if source_hash is not None:
+            sets.append("source_hash = %s")
+            params.append(source_hash)
         if new.status is VariantStatus.DRAFT:
             sets.append("native_handle = NULL")  # an edit invalidates anything prepared
         elif handle is not None:

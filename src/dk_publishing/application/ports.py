@@ -13,6 +13,7 @@ from dk_publishing.domain.capabilities import Capabilities
 from dk_publishing.domain.model import Variant, VariantEvent
 from dk_publishing.domain.planning import Action, NextStep
 from dk_publishing.domain.publishing import LivePost, Rendition, VariantSnapshot, Violation
+from dk_publishing.domain.sheet import MediaFile, RawRow, SheetSnapshot, StatusPlan
 from dk_publishing.domain.status import VariantStatus
 
 Handle = Mapping[
@@ -52,6 +53,43 @@ class PublisherRegistry(Protocol):
     def for_platform(self, platform: str) -> Publisher: ...
 
 
+class DuplicateAccount(Exception):
+    """An account with this display name (or external id) already exists on the platform."""
+
+
+@dataclass(frozen=True, slots=True)
+class AccountInfo:
+    id: str
+    platform: str
+    display_name: str | None
+    status: str
+
+
+@dataclass(frozen=True, slots=True)
+class SyncVariant:
+    """A variant with the context the Sheet sync needs to match it to a row."""
+
+    variant: Variant
+    post_key: str
+    title: str | None
+    account_name: str | None
+    source_hash: str | None
+    external_url: str | None
+    last_reason: str | None  # the reason on the variant's latest event
+
+
+class SheetGateway(Protocol):
+    def read(self) -> SheetSnapshot:
+        """Read the Posts and platform tabs into typed rows. Must be called before `write`."""
+
+    def write(self, plan: StatusPlan) -> int:
+        """Write status back in one batch. Returns how many cells were written."""
+
+
+class MediaCatalog(Protocol):
+    def list_files(self) -> list[MediaFile]: ...
+
+
 class DuplicateAttempt(Exception):
     """An attempt with this idempotency key already exists. The call must not be made again."""
 
@@ -68,8 +106,28 @@ class DueAction:
     account_id: str  # runs are limited to one at a time per account
 
 
+class SyncRepository(Protocol):
+    def accounts(self, tenant_id: str) -> list[AccountInfo]: ...
+
+    def add_account(
+        self, tenant_id: str, platform: str, display_name: str, external_id: str
+    ) -> str:
+        """Returns the new account id. Raises DuplicateAccount."""
+
+    def upsert_post(self, tenant_id: str, post_key: str, title: str) -> str:
+        """Returns the post id, creating the post or updating its title."""
+
+    def variants(self, tenant_id: str) -> list[SyncVariant]: ...
+
+    def update_inputs(self, variant_id: str, *, publish_at: datetime, source_hash: str) -> bool:
+        """Record new inputs on a draft or invalid variant without a state change. False if the
+        variant is no longer one of those."""
+
+    def save_snapshots(self, tenant_id: str, sync_id: str, rows: Sequence[RawRow]) -> None: ...
+
+
 class VariantRepository(Protocol):
-    def add(self, variant: Variant) -> None:
+    def add(self, variant: Variant, *, source_hash: str | None = None) -> None:
         """Insert a new variant. It must be a fresh draft (version 0, no snapshot)."""
 
     def get(self, variant_id: str) -> Variant | None: ...
@@ -95,6 +153,7 @@ class VariantRepository(Protocol):
         snapshot: Mapping[str, Any] | None = None,
         handle: Handle | None = None,
         live: LivePost | None = None,
+        source_hash: str | None = None,
     ) -> bool:
         """Persist one transition atomically, as a compare-and-set on (status, version).
 
@@ -149,6 +208,9 @@ class UnitOfWork(Protocol):
 
     @property
     def attempts(self) -> AttemptRepository: ...
+
+    @property
+    def sync(self) -> SyncRepository: ...
 
     def __enter__(self) -> Self: ...
 

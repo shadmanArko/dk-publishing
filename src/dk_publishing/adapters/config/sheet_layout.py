@@ -54,6 +54,7 @@ class SheetLayout:
     calendar: tuple[Column, ...]
     lists: tuple[Column, ...]
     readme: tuple[str, ...] = field(default_factory=tuple)
+    sample: Mapping[str, Any] = field(default_factory=dict)
 
     def platform_columns(self, platform: str) -> tuple[Column, ...]:
         extras = self.platform_extras.get(platform, ())
@@ -80,10 +81,17 @@ def load_sheet_layout(path: Path, platform_keys: set[str]) -> SheetLayout:
             calendar=_columns(raw["calendar"], "calendar"),
             lists=_columns(raw.get("lists") or [], "lists"),
             readme=tuple(str(line) for line in raw.get("readme") or []),
+            sample=raw.get("sample") or {},
         )
     except KeyError as exc:
         raise ConfigError(f"{path}: missing section {exc}") from None
 
+    sample_rows = (layout.sample.get("rows") or {}) if layout.sample else {}
+    if layout.sample and not (layout.sample.get("post") or {}).get("post_key"):
+        raise ConfigError("sheet.yaml sample.post needs a post_key")
+    if set(sample_rows) - platform_keys:
+        extra = sorted(set(sample_rows) - platform_keys)
+        raise ConfigError(f"sheet.yaml sample has platforms not in platforms.yaml: {extra}")
     unknown = set(layout.platform_extras) - platform_keys
     if unknown:
         raise ConfigError(

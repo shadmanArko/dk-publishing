@@ -87,6 +87,20 @@ calendar:
 lists:
   - {name: subreddits, kind: text, note: "Subreddits you post to, one per row, without r/."}
 
+# `dk sheet sample` adds this post to the Sheet (and a dry-run account per platform) so there is
+# something real to try. `ready` is left unticked: ticking it yourself is the first test.
+sample:
+  post:
+    post_key: DK-2026-0412
+    title: Eid platter reel
+    media: eid_platter.mp4
+    default_caption: "Kacchi biryani, slow-cooked for Eid and still warm. Order for pickup this weekend."
+    default_slot: "2026-11-14 18:00"
+    ready: false
+  rows:
+    instagram: {enabled: true, account: "Dhaka Kacchi (dry run)", format: reel, share_to_feed: true}
+    facebook: {enabled: true, account: "Dhaka Kacchi (dry run)", format: video}
+
 readme:
   - "DK Publishing: how to use this Sheet"
   - ""

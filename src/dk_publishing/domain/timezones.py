@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 BERLIN = ZoneInfo("Europe/Berlin")
@@ -41,3 +41,16 @@ def berlin_to_utc(local: datetime) -> datetime:
 def utc_to_berlin(moment: datetime) -> datetime:
     """Berlin wall-clock view of an instant, for display only."""
     return ensure_utc(moment).astimezone(BERLIN)
+
+
+# Google Sheets stores dates as days since this date (with the time as a fraction of a day).
+_SHEETS_EPOCH = datetime(1899, 12, 30)
+
+
+def serial_to_local(serial: float) -> datetime:
+    """A Sheets date serial as naive wall-clock time (the Sheet's own time zone, Berlin)."""
+    return (_SHEETS_EPOCH + timedelta(days=serial)).replace(microsecond=0)
+
+
+def local_to_serial(local: datetime) -> float:
+    return (local - _SHEETS_EPOCH).total_seconds() / 86400

@@ -15,3 +15,6 @@ run_coordinator:
         limit: 1
         value:
           applyLimitPerUniqueValue: true
+      # Only one Sheet sync at a time, so two runs never write status back over each other.
+      - key: dk/sync
+        limit: 1

@@ -2,7 +2,7 @@
 
 from collections.abc import Callable
 
-from dagster import Config, JobDefinition, OpExecutionContext, job, op
+from dagster import Config, Failure, JobDefinition, OpExecutionContext, job, op
 
 from dk_publishing.application.services import Services
 from dk_publishing.application.use_cases.dispatch import expire_variant
@@ -14,7 +14,8 @@ from dk_publishing.application.use_cases.prepare import prepare_variant
 from dk_publishing.application.use_cases.publish import publish_variant
 from dk_publishing.application.use_cases.reconcile import reconcile_variant
 from dk_publishing.application.use_cases.results import RunResult
-from dk_publishing.entrypoints.dagster_defs.resources import ServicesResource
+from dk_publishing.application.use_cases.sync_sheet import sync_sheet
+from dk_publishing.entrypoints.dagster_defs.resources import ServicesResource, SheetSyncResource
 
 
 class ActionConfig(Config):
@@ -53,3 +54,24 @@ def housekeeping_op(context: OpExecutionContext, services: ServicesResource) -> 
 @job
 def housekeeping() -> None:
     housekeeping_op()
+
+
+@op
+def sync_sheet_op(context: OpExecutionContext, sheet_sync: SheetSyncResource) -> None:
+    report = sync_sheet(sheet_sync.services())
+    context.log.info(
+        f"sheet sync: created {report.created}, approved {report.approved}, invalid "
+        f"{report.marked_invalid}, withdrawn {report.withdrawn}, cancelled {report.cancelled}, "
+        f"wrote {report.cells_written} cells"
+    )
+    for problem in report.problems:
+        context.log.warning(problem)
+    if report.halted:
+        raise Failure(description=report.halted)  # a person must look before anything is cancelled
+    if report.errors:
+        raise Failure(description="; ".join(report.errors))
+
+
+@job(name="sync_sheet")
+def sync_sheet_job() -> None:
+    sync_sheet_op()

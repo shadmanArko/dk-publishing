@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import replace
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -34,13 +35,24 @@ def move(
     snapshot: Mapping[str, Any] | None = None,
     handle: Handle | None = None,
     live: LivePost | None = None,
+    publish_at: datetime | None = None,
+    source_hash: str | None = None,
 ) -> Variant | None:
     """Transition and persist in one compare-and-set. None means another run got there first."""
     moved, event = transition(
         variant, to, actor=actor, reason=reason, at=at, snapshot_hash=snapshot_hash
     )
+    if publish_at is not None:
+        moved = replace(moved, publish_at=publish_at)
     applied = uow.variants.apply(
-        variant, moved, event, next_step, snapshot=snapshot, handle=handle, live=live
+        variant,
+        moved,
+        event,
+        next_step,
+        snapshot=snapshot,
+        handle=handle,
+        live=live,
+        source_hash=source_hash,
     )
     return moved if applied else None
 

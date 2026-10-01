@@ -72,8 +72,10 @@ def test_every_expected_definition_is_present() -> None:
         "reconcile_variant",
         "expire_variant",
         "housekeeping",
+        "sync_sheet",
     }
     assert defs.get_sensor_def("due_actions").minimum_interval_seconds == 30
+    assert defs.get_sensor_def("sheet_changed").minimum_interval_seconds == 120
     schedule = defs.get_schedule_def("housekeeping")
     assert (schedule.cron_schedule, schedule.execution_timezone) == ("*/5 * * * *", "Europe/Berlin")
 
@@ -180,12 +182,15 @@ def test_a_day_of_posts_through_the_sensor_and_jobs(conninfo: str, seed: Seed) -
     assert len(launched) == 2 * len(slots)  # one prepare and one publish each
 
 
-def test_the_queue_allows_one_run_per_account_at_a_time() -> None:
+def test_the_queue_allows_one_run_per_account_and_one_sync_at_a_time() -> None:
     for name in ("dagster.dev.yaml", "dagster.prod.yaml"):
         config = yaml.safe_load((REPO / "dagster" / name).read_text())
-        [limit] = config["run_coordinator"]["config"]["tag_concurrency_limits"]
-        assert limit["key"] == "dk/account" and limit["limit"] == 1
-        assert limit["value"]["applyLimitPerUniqueValue"] is True
+        limits = {
+            x["key"]: x for x in config["run_coordinator"]["config"]["tag_concurrency_limits"]
+        }
+        assert limits["dk/account"]["limit"] == 1
+        assert limits["dk/account"]["value"]["applyLimitPerUniqueValue"] is True
+        assert limits["dk/sync"]["limit"] == 1
     prod = yaml.safe_load((REPO / "dagster" / "dagster.prod.yaml").read_text())
     assert prod["storage"]["postgres"]["postgres_url"] == {"env": "DAGSTER_DATABASE_URL"}
 

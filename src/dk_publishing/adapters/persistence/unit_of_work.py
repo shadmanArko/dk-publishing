@@ -6,6 +6,7 @@ from typing import Any, Self
 import psycopg
 
 from dk_publishing.adapters.persistence.attempts import PostgresAttemptRepository
+from dk_publishing.adapters.persistence.sync import PostgresSyncRepository
 from dk_publishing.adapters.persistence.variants import PostgresVariantRepository
 
 
@@ -14,6 +15,7 @@ class PostgresUnitOfWork:
 
     variants: PostgresVariantRepository
     attempts: PostgresAttemptRepository
+    sync: PostgresSyncRepository
 
     def __init__(self, conninfo: str) -> None:
         self._conninfo = conninfo
@@ -23,6 +25,7 @@ class PostgresUnitOfWork:
         self._conn = psycopg.connect(self._conninfo, options="-c timezone=UTC")
         self.variants = PostgresVariantRepository(self._conn)
         self.attempts = PostgresAttemptRepository(self._conn)
+        self.sync = PostgresSyncRepository(self._conn)
         return self
 
     def __exit__(

@@ -18,8 +18,9 @@ from dk_publishing.entrypoints.dagster_defs.jobs import (
     prepare_variant_job,
     publish_variant_job,
     reconcile_variant_job,
+    sync_sheet_job,
 )
-from dk_publishing.entrypoints.dagster_defs.resources import ServicesResource
+from dk_publishing.entrypoints.dagster_defs.resources import ServicesResource, SheetSyncResource
 
 BATCH = 50
 
@@ -67,3 +68,21 @@ def due_actions(
         yield SkipReason("nothing due")
     for item in launchable:
         yield run_request(item)
+
+
+@sensor(
+    job=sync_sheet_job,
+    minimum_interval_seconds=120,
+    default_status=DefaultSensorStatus.RUNNING,
+)
+def sheet_changed(
+    context: SensorEvaluationContext, sheet_sync: SheetSyncResource
+) -> Iterator[RunRequest | SkipReason]:
+    """Start a sync when Drive says the Sheet was modified. Our own write-back also bumps the
+    modified time, which costs one extra sync that finds nothing to do and writes nothing."""
+    modified = sheet_sync.modified_at()
+    if modified == context.cursor:
+        yield SkipReason("the Sheet has not changed")
+        return
+    context.update_cursor(modified)
+    yield RunRequest(run_key=f"sync:{modified}", tags={"dk/sync": "sheet"})

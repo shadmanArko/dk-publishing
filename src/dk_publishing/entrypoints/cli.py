@@ -1,4 +1,4 @@
-"""Admin commands: migrate, seed-rehearsal, check-google, sheet init."""
+"""Admin commands: migrate, sync, account, sheet init/sample, check-google, seed-rehearsal."""
 
 from __future__ import annotations
 
@@ -12,7 +12,10 @@ from pathlib import Path
 from googleapiclient.errors import HttpError
 
 from dk_publishing import composition
+from dk_publishing.adapters.config.platforms import ConfigError
 from dk_publishing.adapters.sheets.google_access import CredentialsError
+from dk_publishing.application.ports import DuplicateAccount
+from dk_publishing.application.use_cases.sync_sheet import sync_sheet
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -30,6 +33,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     init.add_argument(
         "--dry-run", action="store_true", help="show what would change; write nothing"
     )
+    sheet_commands.add_parser("sample", help="add the sample post to the Sheet")
+    sync = commands.add_parser("sync", help="read the Sheet and update posts now")
+    sync.add_argument(
+        "--allow-cancellations", action="store_true", help="skip the bulk-cancel guard"
+    )
+    account = commands.add_parser("account", help="dry-run accounts")
+    account_commands = account.add_subparsers(dest="account_command", required=True)
+    account_commands.add_parser("list", help="list accounts")
+    add = account_commands.add_parser("add", help="add a dry-run account")
+    add.add_argument("platform")
+    add.add_argument("name", help="display name, as it appears in the Sheet dropdown")
     rehearsal = commands.add_parser(
         "seed-rehearsal", help="create approved dry-run posts a few minutes from now"
     )
@@ -43,7 +57,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "check-google":
         return _check_google()
     if args.command == "sheet":
-        return _sheet_init(dry_run=args.dry_run)
+        return _sample() if args.sheet_command == "sample" else _sheet_init(dry_run=args.dry_run)
+    if args.command == "sync":
+        return _sync(allow_cancellations=args.allow_cancellations)
+    if args.command == "account":
+        return _account(args)
 
     database_url = os.environ.get("DATABASE_URL", "").strip()
     if not database_url:
@@ -145,3 +163,90 @@ def _sheet_init(*, dry_run: bool) -> int:
     if dry_run:
         print("Dry run: nothing was written. Run without --dry-run to apply.")
     return 0 if not report.problems else 1
+
+
+def _google_env() -> dict[str, str] | None:
+    wanted = (
+        "DATABASE_URL",
+        "GOOGLE_APPLICATION_CREDENTIALS",
+        "GOOGLE_SHEET_ID",
+        "GOOGLE_DRIVE_FOLDER_ID",
+    )
+    values = {name: os.environ.get(name, "").strip() for name in wanted}
+    missing = [name for name, value in values.items() if not value]
+    if missing:
+        print(f"Set in .env: {', '.join(missing)}", file=sys.stderr)
+        return None
+    return values
+
+
+def _sync(*, allow_cancellations: bool) -> int:
+    env = _google_env()
+    if env is None:
+        return 2
+    try:
+        services = composition.build_sync_services(
+            env["DATABASE_URL"],
+            Path(env["GOOGLE_APPLICATION_CREDENTIALS"]).expanduser(),
+            env["GOOGLE_SHEET_ID"],
+            env["GOOGLE_DRIVE_FOLDER_ID"],
+        )
+        report = sync_sheet(services, allow_cancellations=allow_cancellations)
+    except CredentialsError as exc:
+        print(f"[FAIL] {exc}", file=sys.stderr)
+        return 1
+    except HttpError as exc:
+        print(
+            f"[FAIL] Google refused the request ({exc.resp.status}). Run: make check-google",
+            file=sys.stderr,
+        )
+        return 1
+
+    print(
+        f"created {report.created}, approved {report.approved}, invalid {report.marked_invalid}, "
+        f"approvals withdrawn {report.withdrawn}, cancelled {report.cancelled}, "
+        f"already live {report.left_live}, busy {report.busy}; wrote {report.cells_written} cells"
+    )
+    for problem in report.problems:
+        print(f"[warn] {problem}")
+    for error in report.errors:
+        print(f"[FAIL] {error}")
+    if report.halted:
+        print(f"[HALTED] {report.halted}")
+    return 1 if (report.halted or report.errors) else 0
+
+
+def _account(args: argparse.Namespace) -> int:
+    database_url = os.environ.get("DATABASE_URL", "").strip()
+    if not database_url:
+        print("DATABASE_URL is required and has no default.", file=sys.stderr)
+        return 2
+    if args.account_command == "list":
+        for a in composition.list_accounts(database_url):
+            print(f"{a.platform:<10} {a.display_name or '(no name)':<30} {a.status}")
+        return 0
+    try:
+        composition.add_account(database_url, args.platform, args.name)
+    except (ConfigError, DuplicateAccount) as exc:
+        print(f"[FAIL] {exc}", file=sys.stderr)
+        return 1
+    print(f"added {args.name!r} for {args.platform}; it appears in the Sheet's account dropdown")
+    return 0
+
+
+def _sample() -> int:
+    env = _google_env()
+    if env is None:
+        return 2
+    try:
+        done = composition.install_sample(
+            env["DATABASE_URL"],
+            Path(env["GOOGLE_APPLICATION_CREDENTIALS"]).expanduser(),
+            env["GOOGLE_SHEET_ID"],
+            env["GOOGLE_DRIVE_FOLDER_ID"],
+        )
+    except (CredentialsError, ConfigError) as exc:
+        print(f"[FAIL] {exc}", file=sys.stderr)
+        return 1
+    print("\n".join(f"[did] {line}" for line in done))
+    return 0
