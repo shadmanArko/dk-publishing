@@ -17,7 +17,7 @@ test:  ## pytest with coverage gate
 	uv run pytest --cov --cov-report=term-missing
 check: lint typecheck arch test  ## everything CI runs
 
-.PHONY: db-up db-down migrate dagster-dev seed-rehearsal check-google
+.PHONY: db-up db-down migrate dagster-dev seed-rehearsal check-google sheet-init sheet-init-dry
 db-up:  ## start the local dev Postgres (Docker) on :5433
 	docker compose -f compose.dev.yaml up -d --wait
 db-down:  ## stop it (data kept)
@@ -31,3 +31,7 @@ seed-rehearsal:  ## create approved dry-run posts a few minutes out
 	uv run --env-file .env dk seed-rehearsal
 check-google:  ## test the Google service account, Sheet and Drive folder
 	uv run --env-file .env dk check-google
+sheet-init-dry:  ## show what `sheet-init` would change; writes nothing
+	uv run --env-file .env dk sheet init --dry-run
+sheet-init:  ## create/repair the Google Sheet layout (never overwrites data)
+	uv run --env-file .env dk sheet init

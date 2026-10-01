@@ -9,6 +9,7 @@ from pathlib import Path
 
 from dk_publishing.adapters.clock import SystemClock
 from dk_publishing.adapters.config.platforms import ConfigError, Mode, load_platforms
+from dk_publishing.adapters.config.sheet_layout import load_sheet_layout
 from dk_publishing.adapters.persistence.migrate import apply_migrations
 from dk_publishing.adapters.persistence.rehearsal import create_rehearsal_drafts
 from dk_publishing.adapters.persistence.unit_of_work import PostgresUnitOfWork
@@ -20,6 +21,7 @@ from dk_publishing.adapters.sheets.google_access import (
     connect,
     expected_missing_tabs,
 )
+from dk_publishing.adapters.sheets.sheet_init import InitReport, initialise
 from dk_publishing.application.ports import Publisher, UnitOfWork
 from dk_publishing.application.services import Services
 from dk_publishing.application.use_cases.approve import approve
@@ -28,6 +30,7 @@ from dk_publishing.domain.model import Actor, ActorKind
 
 DEFAULT_MIGRATIONS_DIR = Path(__file__).resolve().parents[2] / "migrations"
 DEFAULT_PLATFORMS_CONFIG = Path(__file__).resolve().parents[2] / "config" / "platforms.yaml"
+DEFAULT_SHEET_CONFIG = Path(__file__).resolve().parents[2] / "config" / "sheet.yaml"
 
 
 def migrate_database(database_url: str, directory: Path = DEFAULT_MIGRATIONS_DIR) -> list[str]:
@@ -105,3 +108,11 @@ def check_google(
     report.key_file_warning = warning
     tabs = [p.tab for p in load_platforms(DEFAULT_PLATFORMS_CONFIG).values()]
     return report, expected_missing_tabs(report, tabs)
+
+
+def init_sheet(credentials_path: Path, sheet_id: str, *, dry_run: bool) -> InitReport:
+    """Create or repair the Google Sheet layout. Never overwrites existing data."""
+    platforms = load_platforms(DEFAULT_PLATFORMS_CONFIG)
+    layout = load_sheet_layout(DEFAULT_SHEET_CONFIG, set(platforms))
+    sheets, _, _, _ = connect(credentials_path)
+    return initialise(sheets, sheet_id, layout, platforms, dry_run=dry_run)

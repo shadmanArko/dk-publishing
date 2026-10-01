@@ -37,6 +37,7 @@ packages = ["src/dk_publishing"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
 addopts = "-ra --strict-markers"
 filterwarnings = [
     "ignore:.*is currently in beta.*",

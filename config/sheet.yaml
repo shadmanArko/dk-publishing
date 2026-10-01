@@ -1,0 +1,111 @@
+# The Google Sheet layout: one place to read or change what each tab and column is.
+# `dk sheet init` builds the Sheet from this file and from config/platforms.yaml.
+#
+# Column kinds:
+#   text, long_text, checkbox, number           plain inputs
+#   date_time                                   must be a real date-time cell (Berlin time)
+#   dropdown      options: [...]                a fixed list
+#   list          list: <name>                  options come from a column on the _lists tab
+#   account       (per platform)                options come from that platform's accounts column
+#   post_key      dropdown of keys on Posts     unique_key: unique values on Posts
+#   status, url, timestamp                      written by the system (grey, protected)
+# `system: true` also makes any column grey and protected. The sync finds columns by header name,
+# so people may reorder columns freely; they must not rename a header.
+sheet:
+  timezone: Europe/Berlin
+  rows: 1000
+  slot_format: "dd.MM.yyyy HH:mm"
+
+posts:
+  - {name: post_key, kind: unique_key, required: true, note: "Required, unique, never reused or renamed. Example: DK-2026-0412"}
+  - {name: title, kind: text, note: "Internal name. Never published."}
+  - {name: media, kind: text, note: "File names in the Drive media folder, comma-separated, in display order."}
+  - {name: default_caption, kind: long_text, note: "Used by any platform tab whose caption is blank."}
+  - {name: default_slot, kind: date_time, note: "Berlin local time. Must be a real date-time cell, not text."}
+  - {name: ready, kind: checkbox, note: "Tick to submit and approve this post for the platforms enabled on the other tabs."}
+  - {name: status, kind: status, note: "Roll-up across platforms. Written by the system."}
+  - {name: last_error, kind: text, system: true, note: "Plain-language reason, if something is wrong. Written by the system."}
+
+# Every platform tab is: platform_before + that platform's extras + platform_after.
+platform_before:
+  - {name: post_key, kind: post_key, required: true, note: "Pick an existing post_key from the Posts tab."}
+  - {name: enabled, kind: checkbox, note: "Untick to cancel anything that is not live yet."}
+  - {name: account, kind: account, required: true, note: "A connected account on this platform."}
+  - {name: caption, kind: long_text, note: "Blank means the default caption from the Posts tab."}
+  - {name: slot, kind: date_time, note: "Blank means the default slot. Berlin local time, as a real date-time cell."}
+platform_after:
+  - {name: status, kind: status, note: "Written by the system."}
+  - {name: live_url, kind: url, note: "Link to the live post. Written by the system."}
+  - {name: last_error, kind: text, system: true, note: "Plain-language reason, if something is wrong. Written by the system."}
+  - {name: synced_at, kind: timestamp, note: "When the system last updated this row."}
+
+platform_extras:
+  instagram:
+    - {name: format, kind: dropdown, options: [feed, carousel, reel], required: true}
+    - {name: share_to_feed, kind: checkbox, note: "Reels only: also show the reel on the profile grid."}
+    - {name: cover_at_s, kind: number, note: "Reels only: second of the video to use as the cover."}
+  facebook:
+    - {name: format, kind: dropdown, options: [post, photo, video, reel], required: true}
+    - {name: link, kind: text, note: "Optional link attached to the post."}
+  threads:
+    - {name: format, kind: dropdown, options: [text, image, carousel, video], required: true}
+    - {name: reply_control, kind: dropdown, options: [everyone, accounts_you_follow, mentioned_only]}
+  linkedin:
+    - {name: visibility, kind: dropdown, options: [public, connections]}
+  x:
+    - {name: reply_settings, kind: dropdown, options: [everyone, following, mentioned_users], note: "Captions with a link cost much more on X; put the link in the profile instead."}
+  youtube:
+    - {name: title, kind: text, required: true, note: "Video title (up to 100 characters)."}
+    - {name: description, kind: long_text}
+    - {name: tags, kind: text, note: "Comma-separated."}
+    - {name: category, kind: dropdown, options: [People & Blogs, Entertainment, Howto & Style, Education, News & Politics, Travel & Events]}
+    - {name: visibility_after_publish, kind: dropdown, options: [public, unlisted, private]}
+    - {name: made_for_kids, kind: dropdown, options: ["yes", "no"], required: true, note: "YouTube requires an explicit answer for every video."}
+  reddit:
+    - {name: subreddit, kind: list, list: subreddits, required: true, note: "Without the r/ prefix."}
+    - {name: title, kind: text, required: true}
+    - {name: flair, kind: text}
+    - {name: post_type, kind: dropdown, options: [text, link, image, video], required: true}
+  tiktok:
+    - {name: privacy_level, kind: dropdown, options: [public, friends, followers, only_me], required: true, note: "Always chosen per post, never defaulted."}
+    - {name: allow_comments, kind: checkbox}
+    - {name: allow_duet, kind: checkbox}
+    - {name: allow_stitch, kind: checkbox}
+    - {name: commercial_disclosure, kind: checkbox, note: "Tick if the post promotes your own business."}
+
+calendar:
+  - {name: slot, kind: timestamp}
+  - {name: platform, kind: text, system: true}
+  - {name: account, kind: text, system: true}
+  - {name: post_key, kind: text, system: true}
+  - {name: title, kind: text, system: true}
+  - {name: status, kind: status}
+  - {name: source, kind: text, system: true, note: "human or agent"}
+
+# Extra lists on the _lists tab. Each platform also gets an accounts_<platform> column, filled by
+# the system when an account is connected.
+lists:
+  - {name: subreddits, kind: text, note: "Subreddits you post to, one per row, without r/."}
+
+readme:
+  - "DK Publishing: how to use this Sheet"
+  - ""
+  - "1. Plan a post on the Posts tab: a unique post_key, a title, the media file names, a default caption, a default slot."
+  - "2. On each platform tab add a row for that post: pick the post_key, tick enabled, choose the account, and fill the options."
+  - "   Leave caption and slot blank to use the defaults from the Posts tab."
+  - "3. Put the media files in the Drive folder 'DK Publishing Media'. The name in the media column must match exactly."
+  - "4. When everything is right, tick ready on the Posts tab. That approves the post for every platform you enabled."
+  - ""
+  - "Times are Berlin local time and must be real date-time cells, for example 14.11.2026 18:00."
+  - "The hour that does not exist (spring) or happens twice (autumn) on the clock-change night is rejected."
+  - ""
+  - "Grey columns are written by the system. Editing one shows a warning; please do not."
+  - "Do not rename a header. You may reorder columns, and add your own columns to the right."
+  - "Sorting and filtering are safe: rows are matched by post_key, never by row number."
+  - ""
+  - "status shows where each post is: draft, invalid, approved, preparing, prepared, publishing, published, failed, expired, cancelled."
+  - "last_error says in plain words what to fix."
+  - "Once a post is live, edits to its row are ignored."
+  - ""
+  - "Example row for the Posts tab:"
+  - "  post_key DK-2026-0412 | title Eid platter reel | media eid_platter.mp4 | default_slot 14.11.2026 18:00 | ready (tick)"

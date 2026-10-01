@@ -1,4 +1,4 @@
-"""Admin commands: `dk migrate`."""
+"""Admin commands: migrate, seed-rehearsal, check-google, sheet init."""
 
 from __future__ import annotations
 
@@ -8,6 +8,8 @@ import sys
 from collections.abc import Sequence
 from datetime import timedelta
 from pathlib import Path
+
+from googleapiclient.errors import HttpError
 
 from dk_publishing import composition
 from dk_publishing.adapters.sheets.google_access import CredentialsError
@@ -19,6 +21,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     commands.add_parser("migrate", help="apply database migrations")
     commands.add_parser(
         "check-google", help="test the Google service account, Sheet and Drive folder"
+    )
+    sheet = commands.add_parser("sheet", help="Google Sheet commands")
+    sheet_commands = sheet.add_subparsers(dest="sheet_command", required=True)
+    init = sheet_commands.add_parser(
+        "init", help="create or repair the Sheet layout (never overwrites data)"
+    )
+    init.add_argument(
+        "--dry-run", action="store_true", help="show what would change; write nothing"
     )
     rehearsal = commands.add_parser(
         "seed-rehearsal", help="create approved dry-run posts a few minutes from now"
@@ -32,6 +42,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.command == "check-google":
         return _check_google()
+    if args.command == "sheet":
+        return _sheet_init(dry_run=args.dry_run)
 
     database_url = os.environ.get("DATABASE_URL", "").strip()
     if not database_url:
@@ -85,3 +97,51 @@ def _check_google() -> int:
     for problem in report.problems:
         print(f"[FAIL] {problem}")
     return 0 if report.ok else 1
+
+
+def _sheet_init(*, dry_run: bool) -> int:
+    path, sheet_id = (
+        os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", ""),
+        os.environ.get("GOOGLE_SHEET_ID", ""),
+    )
+    if not path.strip() or not sheet_id.strip():
+        print("Set GOOGLE_APPLICATION_CREDENTIALS and GOOGLE_SHEET_ID in .env", file=sys.stderr)
+        return 2
+    try:
+        report = composition.init_sheet(Path(path).expanduser(), sheet_id.strip(), dry_run=dry_run)
+    except CredentialsError as exc:
+        print(f"[FAIL] {exc}", file=sys.stderr)
+        return 1
+    except HttpError as exc:
+        print(
+            f"[FAIL] Google refused the request ({exc.resp.status}). Run: make check-google",
+            file=sys.stderr,
+        )
+        return 1
+
+    verb = "would" if dry_run else "did"
+    if report.timezone_set:
+        print(f"[{verb}] set the Sheet time zone to {report.timezone_set}")
+    for old, new in report.renamed:
+        print(f"[{verb}] rename the blank tab {old!r} to {new!r}")
+    if report.created:
+        print(f"[{verb}] create {len(report.created)} tabs: {', '.join(report.created)}")
+    for tab, added in report.headers_added.items():
+        if added and tab not in report.created:
+            print(f"[{verb}] add headers to {tab!r}: {', '.join(added)}")
+    if report.readme_written:
+        print(f"[{verb}] write the README text")
+    if report.reordered:
+        print(f"[{verb}] put the tabs in order")
+    if report.formatted:
+        print(
+            f"[{verb}] (re)apply formatting, dropdowns and protection "
+            f"on {len(report.formatted)} tabs"
+        )
+    if report.left_alone:
+        print(f"[keep] left alone (not ours): {', '.join(report.left_alone)}")
+    for problem in report.problems:
+        print(f"[FAIL] {problem}")
+    if dry_run:
+        print("Dry run: nothing was written. Run without --dry-run to apply.")
+    return 0 if not report.problems else 1
