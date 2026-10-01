@@ -3,7 +3,9 @@ name = "dk-publishing"
 version = "0.1.0"
 description = "Dhaka Kacchi social publishing pipeline: schedule approved posts to eight platforms."
 requires-python = ">=3.12,<3.13"
-dependencies = []
+dependencies = [
+    "tzdata>=2026.4",
+]
 
 [dependency-groups]
 dev = [
