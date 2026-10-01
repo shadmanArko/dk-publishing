@@ -39,3 +39,17 @@
   `assisted`/`live`). YAML reads an unquoted `off` as `False`; the loader accepts it, don't "fix" that.
 - **Local loop:** `make db-up && make migrate && make dagster-dev`, then `make seed-rehearsal` and watch
   localhost:3000. `.env` (git-ignored) holds identifiers only (Sheet/Drive/Meta IDs); keys go outside the repo.
+- **Sheet sync** (`application/use_cases/sync_sheet.py`, rules in `domain/sync.py`): rows match variants by
+  `(post_key, platform, account)`. `variants.source_hash` is the hash of everything editable that affects a variant
+  (row + Posts row + Drive checksums, never the title); a change after approval withdraws it and re-approves if
+  `ready` is still ticked. Cancelling stores the row's hash (or `removed`) so putting the row back revives the post.
+  Slot-in-the-past is only checked when creating/re-approving, never for a post already waiting.
+- **Sheets API traps (found against the real API, not the fakes):** an unticked checkbox comes back as `FALSE` in every
+  row, so "row is empty" must ignore `False` and the "last used row" must too. Write with `valueInputOption=RAW`
+  (an error message starting with `=` must not become a formula). Write only changed cells, or the write-back's own
+  edit re-triggers the sensor forever; a no-op sync must write 0 cells.
+- The `sheet_changed` sensor costs one extra no-op sync after our own write-back (Drive's modifiedTime moves).
+  `sheet_sync_fallback` (15 min) exists because a failed sync would not otherwise retry until the Sheet changes.
+- More than 5 scheduled cancellations in one sync halts it (nothing applied, the Dagster run fails). Override with
+  `dk sync --allow-cancellations`. Telegram will replace the failed-run signal later.
+- `dk sheet sample` / `dk account add` create dry-run accounts; real ones come from the (unbuilt) connect flow.

@@ -307,6 +307,23 @@ def test_writing_before_reading_is_a_programming_error() -> None:
         gateway(blank())[0].write(StatusPlan())
 
 
+def test_unticked_checkboxes_down_the_whole_column_do_not_count_as_used_rows() -> None:
+    """The real API returns FALSE for every empty checkbox cell, so the grid looks 1000 rows deep."""
+    g = blank()
+    put(g, "Posts", post_key="DK-1")
+    ready = TABS["Posts"].index("ready")
+    for _ in range(998):
+        row: list[Any] = [None] * len(TABS["Posts"])
+        row[ready] = False
+        g["Posts"].append(row)
+    assert len(g["Posts"]) == 1000
+    gw, fake = gateway(g)
+    snapshot = gw.read()
+    assert [p.post_key for p in snapshot.posts] == ["DK-1"]  # the FALSE rows are not posts
+    assert gw.append_row("Posts", {"post_key": "DK-2"}) == 3  # and not rows to skip over
+    assert cell(fake, "'Posts'!A3") == "DK-2"
+
+
 def test_a_new_row_goes_below_the_last_used_row_and_never_over_data() -> None:
     g = blank()
     put(g, "Posts", post_key="DK-1")

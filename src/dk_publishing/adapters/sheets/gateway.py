@@ -69,7 +69,7 @@ class GoogleSheetGateway:
         )
         grids = {t: v.get("values", []) for t, v in zip(tabs, found["valueRanges"], strict=True)}
         self._existing = {t: grids[t] for t in (CALENDAR, LISTS)}
-        self._row_counts = {t: max(len(g), 1) for t, g in grids.items()}
+        self._row_counts = {t: _last_used_row(g) for t, g in grids.items()}
 
         snapshot = SheetSnapshot()
         self._headers = {}
@@ -270,6 +270,16 @@ class GoogleSheetGateway:
 
 def _at(values: Sequence[Any], i: int) -> Any:
     return values[i] if i < len(values) else None
+
+
+def _last_used_row(grid: Sequence[Sequence[Any]]) -> int:
+    """The last 1-based row that has something in it. Unticked checkboxes come back from the API
+    as FALSE in every row of their column, so a row of only those counts as empty."""
+    last = 1
+    for number, values in enumerate(grid, start=1):
+        if any(_present(cell) for cell in values):
+            last = number
+    return last
 
 
 def _present(value: Any) -> bool:
