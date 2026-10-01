@@ -389,7 +389,10 @@ def test_two_runs_racing_to_publish_make_one_post(conninfo: str, seed: Seed) -> 
     for t in threads:
         t.join()
 
-    assert sorted(results) == sorted([R.PUBLISHED] + [R.LOST_RACE] * 5)
+    # One winner. A loser either lost the compare-and-set (LOST_RACE) or read the variant after
+    # the winner had already moved it (SKIPPED): both mean "someone else owns this now".
+    assert results.count(R.PUBLISHED) == 1
+    assert set(results) <= {R.PUBLISHED, R.LOST_RACE, R.SKIPPED}
     assert rig.posts(variant.id) == 1 and rig.publisher.calls["publish"] == 1
 
 
