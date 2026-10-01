@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.pyc
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+dist/
+# Never commit plaintext secrets. Only *.enc.yaml (SOPS) files are allowed.
+secrets/*
+!secrets/*.enc.yaml
+.env
+*.key

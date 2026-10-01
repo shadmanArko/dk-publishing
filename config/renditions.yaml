@@ -1,0 +1,12 @@
+# Media profiles are data, not code.
+reel_9x16:
+  kind: video
+  size: 1080x1920
+  fit: crop
+  video: {codec: h264, profile: high, faststart: true}
+  audio: {codec: aac, sample_rate: 48000, channels: 2}
+feed_4x5:
+  kind: image
+  size: 1080x1350
+  format: jpeg
+  colorspace: srgb

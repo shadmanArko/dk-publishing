@@ -1,0 +1,13 @@
+# Per-platform lead times, lateness and limits. No secrets. Values from docs/architecture.md.
+# `mode` is the launch default; the runtime switch lives in channel_settings.
+defaults:
+  max_lateness: 2h
+platforms:
+  facebook:  {mode: dry_run,  native_window: [10m, 30d]}
+  instagram: {mode: dry_run,  prepare_lead: 30m, prepared_ttl: 24h}
+  threads:   {mode: dry_run,  prepare_lead: 10m}
+  youtube:   {mode: dry_run,  native_window: [15m, 180d]}
+  tiktok:    {mode: assisted}
+  linkedin:  {mode: assisted}
+  x:         {mode: off}
+  reddit:    {mode: off}
