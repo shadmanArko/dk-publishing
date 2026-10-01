@@ -14,6 +14,12 @@ from dk_publishing.adapters.persistence.rehearsal import create_rehearsal_drafts
 from dk_publishing.adapters.persistence.unit_of_work import PostgresUnitOfWork
 from dk_publishing.adapters.platforms.dry_run import DryRunPublisher, PostgresLedger
 from dk_publishing.adapters.platforms.registry import StaticPublisherRegistry
+from dk_publishing.adapters.sheets.google_access import (
+    AccessReport,
+    check_access,
+    connect,
+    expected_missing_tabs,
+)
 from dk_publishing.application.ports import Publisher, UnitOfWork
 from dk_publishing.application.services import Services
 from dk_publishing.application.use_cases.approve import approve
@@ -88,3 +94,14 @@ def seed_rehearsal(
         result, _ = approve(services, draft.id, content, actor)
         results.append(result)
     return results
+
+
+def check_google(
+    credentials_path: Path, sheet_id: str, folder_id: str
+) -> tuple[AccessReport, list[str]]:
+    """Probe the Sheet and Drive folder. Returns the report and any expected-but-absent tabs."""
+    sheets, drive, email, warning = connect(credentials_path)
+    report = check_access(sheets, drive, sheet_id=sheet_id, folder_id=folder_id, email=email)
+    report.key_file_warning = warning
+    tabs = [p.tab for p in load_platforms(DEFAULT_PLATFORMS_CONFIG).values()]
+    return report, expected_missing_tabs(report, tabs)

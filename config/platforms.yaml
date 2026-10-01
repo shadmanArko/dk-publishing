@@ -7,17 +7,19 @@
 # The launch plan (ADR 0014) is facebook, instagram, threads, youtube live; tiktok and linkedin
 # assisted; x and reddit off. Until those adapters exist, everything runs dry_run.
 #
+# `tab` is the Google Sheet tab for the platform (display name; defaults to the key).
+#
 # `native_window` marks platforms that can hold a post until the slot [min lead, max lead].
 # Native scheduling is not built yet, so dry_run mode ignores it and uses prepare-then-publish.
 defaults:
   max_lateness: 2h
   prepare_lead: 30m
 platforms:
-  facebook:  {mode: dry_run, native_window: [10m, 30d], prepare_lead: 5m}
-  instagram: {mode: dry_run, prepare_lead: 30m, prepared_ttl: 24h, pulls_media_by_url: true}
-  threads:   {mode: dry_run, prepare_lead: 10m, pulls_media_by_url: true}
-  youtube:   {mode: dry_run, native_window: [15m, 180d], prepare_lead: 5m}
-  tiktok:    {mode: dry_run}
-  linkedin:  {mode: dry_run}
-  x:         {mode: off}
-  reddit:    {mode: off}
+  facebook:  {tab: Facebook, mode: dry_run, native_window: [10m, 30d], prepare_lead: 5m}
+  instagram: {tab: Instagram, mode: dry_run, prepare_lead: 30m, prepared_ttl: 24h, pulls_media_by_url: true}
+  threads:   {tab: Threads, mode: dry_run, prepare_lead: 10m, pulls_media_by_url: true}
+  youtube:   {tab: YouTube, mode: dry_run, native_window: [15m, 180d], prepare_lead: 5m}
+  tiktok:    {tab: TikTok, mode: dry_run}
+  linkedin:  {tab: LinkedIn, mode: dry_run}
+  x:         {tab: X, mode: off}
+  reddit:    {tab: Reddit, mode: off}

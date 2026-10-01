@@ -93,3 +93,11 @@ def test_an_unquoted_off_means_off_not_false(tmp_path: Path) -> None:
     assert load_platforms(path)["a"].mode is Mode.OFF
     with pytest.raises(ConfigError, match="mode must be one of"):
         load_platforms(write(tmp_path, "platforms:\n  a: {mode: true}\n"))
+
+
+def test_every_platform_has_a_sheet_tab_defaulting_to_its_key(tmp_path: Path) -> None:
+    path = write(tmp_path, "platforms:\n  a: {mode: dry_run, tab: Alpha}\n  b: {mode: dry_run}\n")
+    loaded = load_platforms(path)
+    assert (loaded["a"].tab, loaded["b"].tab) == ("Alpha", "b")
+    shipped = load_platforms(DEFAULT_PLATFORMS_CONFIG)
+    assert len({p.tab for p in shipped.values()}) == len(shipped)  # no two share a tab

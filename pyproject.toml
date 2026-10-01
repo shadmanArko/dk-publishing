@@ -7,6 +7,8 @@ dependencies = [
     "dagster>=1.13.24",
     "dagster-postgres>=0.29.24",
     "dagster-webserver>=1.13.24",
+    "google-api-python-client>=2.201.0",
+    "google-auth>=2.59.1",
     "psycopg[binary]>=3.2",
     "pyyaml>=6.0.3",
     "tzdata>=2026.4",
@@ -63,6 +65,10 @@ strict = true
 python_version = "3.12"
 files = ["src", "tests"]
 mypy_path = "src"
+
+[[tool.mypy.overrides]]
+module = ["googleapiclient.*"]
+ignore_missing_imports = true  # no type stubs published
 
 [tool.importlinter]
 root_package = "dk_publishing"

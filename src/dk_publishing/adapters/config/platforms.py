@@ -18,6 +18,7 @@ _DURATION = re.compile(r"^(\d+)([smhd])$")
 _UNITS = {"s": "seconds", "m": "minutes", "h": "hours", "d": "days"}
 _KNOWN = {
     "mode",
+    "tab",
     "native_window",
     "prepare_lead",
     "prepared_ttl",
@@ -41,6 +42,7 @@ class Mode(StrEnum):
 class PlatformSettings:
     mode: Mode
     capabilities: Capabilities
+    tab: str  # the Google Sheet tab for this platform
 
 
 def parse_duration(value: object) -> timedelta:
@@ -59,13 +61,13 @@ def load_platforms(path: Path) -> dict[str, PlatformSettings]:
     result: dict[str, PlatformSettings] = {}
     for name, entry in raw["platforms"].items():
         try:
-            result[name] = _platform({**defaults, **(entry or {})})
+            result[name] = _platform(name, {**defaults, **(entry or {})})
         except (ConfigError, ValueError) as exc:
             raise ConfigError(f"platform {name!r}: {exc}") from exc
     return result
 
 
-def _platform(entry: Mapping[str, Any]) -> PlatformSettings:
+def _platform(name: str, entry: Mapping[str, Any]) -> PlatformSettings:
     unknown = set(entry) - _KNOWN
     if unknown:
         raise ConfigError(f"unknown keys {sorted(unknown)}")
@@ -91,4 +93,4 @@ def _platform(entry: Mapping[str, Any]) -> PlatformSettings:
         pulls_media_by_url=bool(entry.get("pulls_media_by_url", False)),
         max_lateness=parse_duration(entry.get("max_lateness", "2h")),
     )
-    return PlatformSettings(mode, capabilities)
+    return PlatformSettings(mode, capabilities, str(entry.get("tab") or name))
