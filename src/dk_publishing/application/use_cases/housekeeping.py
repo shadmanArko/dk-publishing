@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import timedelta
 
 from dk_publishing.application.services import Services
-from dk_publishing.application.use_cases._common import S, move
+from dk_publishing.application.use_cases._common import S, move, planning_caps
 from dk_publishing.domain.attempt import Outcome
 from dk_publishing.domain.planning import plan_next
 
@@ -47,7 +47,8 @@ def recover_stale_preparing(
     recovered: list[str] = []
     with services.uow() as uow:
         for variant in uow.variants.stale(S.PREPARING, now - after, limit):
-            caps = services.publishers.for_platform(variant.platform).capabilities
+            publisher = services.publishers.for_platform(variant.platform)
+            caps = planning_caps(publisher, uow.variants.snapshot_of(variant.id))
             step = plan_next(status=S.APPROVED, publish_at=variant.publish_at, caps=caps, now=now)
             moved = move(
                 uow,
@@ -64,3 +65,33 @@ def recover_stale_preparing(
                 recovered.append(variant.id)
         uow.commit()
     return recovered
+
+
+def fail_stale_scheduling(
+    services: Services, *, after: timedelta = STALE_AFTER, limit: int = 50
+) -> list[str]:
+    """A run that died while handing a post to the platform may have left a scheduled copy this
+    system cannot see. It is never retried: the variant fails and a person checks the platform."""
+    now = services.clock.now()
+    failed: list[str] = []
+    with services.uow() as uow:
+        for variant in uow.variants.stale(S.SCHEDULING_NATIVE, now - after, limit):
+            moved = move(
+                uow,
+                variant,
+                S.FAILED,
+                at=now,
+                next_step=None,
+                reason=(
+                    f"no outcome recorded for {after} while scheduling; the platform may hold a "
+                    "scheduled copy. Check its scheduled posts, delete any copy by hand, then "
+                    "edit this row to try again"
+                ),
+            )
+            if moved is not None:
+                uow.attempts.finish_open(
+                    variant.id, outcome=Outcome.UNKNOWN, finished_at=now, error_code="stale"
+                )
+                failed.append(variant.id)
+        uow.commit()
+    return failed

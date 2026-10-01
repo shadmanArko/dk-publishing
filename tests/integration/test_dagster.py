@@ -70,6 +70,7 @@ def test_every_expected_definition_is_present() -> None:
         "prepare_variant",
         "publish_variant",
         "reconcile_variant",
+        "schedule_native",
         "expire_variant",
         "housekeeping",
         "sync_sheet",
@@ -198,7 +199,11 @@ def test_the_queue_allows_one_run_per_account_and_one_sync_at_a_time() -> None:
 def test_build_services_wires_only_platforms_that_are_on(conninfo: str) -> None:
     services = composition.build_services(conninfo)
     assert services.publishers.for_platform("instagram").capabilities.native_window is None
-    assert services.publishers.for_platform("facebook").capabilities.native_window is None
+    # Facebook keeps its native window; each row's `delivery` decides whether the planner uses it.
+    assert services.publishers.for_platform("facebook").capabilities.native_window == (
+        timedelta(minutes=10),
+        timedelta(days=30),
+    )
     from dk_publishing.adapters.platforms.registry import UnknownPlatform
 
     with pytest.raises(UnknownPlatform):
@@ -240,3 +245,26 @@ def test_rehearsal_seeding_covers_every_platform_that_is_on(conninfo: str) -> No
             r[0] for r in conn.execute("SELECT DISTINCT platform FROM publishing.variants")
         }
     assert len(platforms) == 6 and not platforms & {"x", "reddit"}
+
+
+def test_a_native_post_is_handed_over_by_its_own_job_and_published_by_the_platform(
+    conninfo: str, seed: Seed
+) -> None:
+    from dk_publishing.application.use_cases.approve import approve
+    from tests.support import NATIVE_CAPS
+
+    rig = Rig(conninfo, seed, caps=NATIVE_CAPS)
+    definitions, resource = wire(rig)
+    variant = rig.draft()
+    approve(rig.services, variant.id, {"caption": "Eid", "delivery": "native"}, ME)
+
+    [request] = requests(definitions, resource)
+    assert request.job_name == "schedule_native"
+    assert request.run_key == f"schedule_native:{variant.id}:{rig.get(variant.id).version}"
+    assert run(definitions, request).success
+    assert rig.get(variant.id).status is S.SCHEDULED_NATIVE
+
+    rig.clock.set(SLOT + 10 * MIN)  # the platform has published it; the next look confirms it
+    [verify] = requests(definitions, resource)
+    assert verify.job_name == "reconcile_variant" and run(definitions, verify).success
+    assert rig.get(variant.id).status is S.PUBLISHED and rig.publisher.calls["publish"] == 0

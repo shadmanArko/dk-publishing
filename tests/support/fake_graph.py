@@ -73,6 +73,8 @@ class FakeGraph:
             return outcome
 
         path = urlparse(str(request.url)).path.split("/", 2)[2]  # drop /v25.0/
+        if request.method == "DELETE":
+            return self._delete(path, urlparse(str(request.url)).query)
         if request.method == "GET":
             query = {k: v[0] for k, v in parse_qs(request.url.query.decode()).items()}
             if path == "debug_token":
@@ -100,19 +102,37 @@ class FakeGraph:
             return {k: (v if k == "source" else v.decode()) for k, v in raw.items()}
         return {k: v[0] for k, v in parse_qs(request.content.decode()).items()}
 
+    def _delete(self, path: str, query: str) -> httpx.Response:
+        if parse_qs(query).get("access_token", [""])[0] != TOKEN:
+            return graph_error(400, 190, "Invalid OAuth access token.", 467)
+        for items in self.items.values():
+            for item in items:
+                if item["id"] == path:
+                    items.remove(item)
+                    return httpx.Response(200, json={"success": True})
+        return graph_error(400, 100, "Unsupported delete request. Object does not exist.")
+
     def _post(self, path: str, form: dict[str, Any]) -> httpx.Response:
         page, edge = path.split("/", 1)
         if page != self.page:
             return graph_error(400, 100, "Unsupported post request. Object does not exist.")
         self._n += 1
         n, created = self._n, self.created.strftime("%Y-%m-%dT%H:%M:%S+0000")
+        held = form.get("published") == "false"
+        due = (
+            datetime.fromtimestamp(int(form["scheduled_publish_time"]), tz=self.created.tzinfo)
+            if held and form.get("scheduled_publish_time")
+            else None
+        )
+        if held and due is None:
+            return graph_error(400, 100, "(#100) scheduled_publish_time is required")
         if edge == "feed":
             if not form.get("message") and not form.get("link"):
                 return graph_error(400, 100, "(#100) The parameter message is required")
             post_id = f"{page}_{n}"
             self.items["feed"].append(
                 {"id": post_id, "message": form.get("message", ""), "created_time": created,
-                 "permalink_url": f"/{page}/posts/{n}"}
+                 "permalink_url": f"/{page}/posts/{n}", "is_published": not held, "due": due}
             )  # fmt: skip
             return httpx.Response(200, json={"id": post_id})
         if edge == "photos":
@@ -125,7 +145,7 @@ class FakeGraph:
         if edge == "videos":
             self.items["videos"].append(
                 {"id": f"vid{n}", "description": form.get("description", ""), "created_time": created,
-                 "permalink_url": f"/{page}/videos/{n}"}
+                 "permalink_url": f"/{page}/videos/{n}", "published": not held, "due": due}
             )  # fmt: skip
             return httpx.Response(200, json={"id": f"vid{n}"})
         return graph_error(400, 100, f"Unknown edge {edge}")
@@ -133,20 +153,40 @@ class FakeGraph:
     def _get(self, path: str, query: dict[str, str]) -> httpx.Response:
         if "/" in path:
             _, edge = path.split("/", 1)
-            return httpx.Response(200, json={"data": list(reversed(self.items.get(edge, [])))})
+            visible = [
+                i
+                for i in self.items.get(edge, [])
+                if i.get("is_published", i.get("published", True))
+            ]  # a post still being held is not on the feed
+            return httpx.Response(200, json={"data": [_public(i) for i in reversed(visible)]})
         if path == self.page:
             return httpx.Response(200, json={"id": self.page, "name": self.name})
         for items in self.items.values():
             for item in items:
                 if item["id"] == path:
+                    flags = {k: item[k] for k in ("is_published", "published") if k in item}
                     return httpx.Response(
-                        200, json={"permalink_url": item["permalink_url"], "id": path}
+                        200, json={"permalink_url": item["permalink_url"], "id": path, **flags}
                     )
         return graph_error(400, 100, "Unsupported get request.")
 
     # --- helpers for tests ---
     def posted(self, edge: str = "feed") -> list[dict[str, Any]]:
+        """Everything on the edge, published or still being held."""
         return self.items[edge]
+
+    def held(self, edge: str = "feed") -> list[dict[str, Any]]:
+        return [i for i in self.items[edge] if not i.get("is_published", i.get("published", True))]
+
+    def publish_due(self, now: datetime) -> None:
+        """Facebook publishing what it was holding, as time passes."""
+        for items in self.items.values():
+            for item in items:
+                due = item.get("due")
+                if due is not None and due <= now:
+                    for key in ("is_published", "published"):
+                        if key in item:
+                            item[key] = True
 
     def lose_response_next(self) -> None:
         self.lose_next_response = True
@@ -157,3 +197,8 @@ class FakeGraph:
 
 def body_of(request: httpx.Request) -> str:
     return json.dumps(request.content.decode(errors="replace"))
+
+
+def _public(item: dict[str, Any]) -> dict[str, Any]:
+    """What Facebook would show: the item without this fake's internal bookkeeping."""
+    return {k: v for k, v in item.items() if k != "due"}

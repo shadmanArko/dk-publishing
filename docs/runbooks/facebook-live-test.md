@@ -16,3 +16,10 @@ Posts made this way are REAL and public on the Page. Delete them by hand afterwa
 6. **Check.** The row's `live_url` opens the post. If something fails, `last_error` says why in plain words.
 
 If the token expires (the row shows "Session has expired"), generate a new one into the same file; no restart.
+
+## Native scheduling (optional)
+
+In the Facebook row set `delivery` to `native`: Facebook holds the post and publishes it itself at the slot,
+even if this system is off. The slot must be at least 10 minutes away. You will see the post under the Page's
+Scheduled posts in Meta Business Suite. Editing, unticking or deleting the row removes it from there first.
+Leave `delivery` blank (or `direct`) and this system publishes at the slot instead.

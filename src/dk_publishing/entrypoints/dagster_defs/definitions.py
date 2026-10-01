@@ -8,6 +8,7 @@ from dk_publishing.entrypoints.dagster_defs.jobs import (
     prepare_variant_job,
     publish_variant_job,
     reconcile_variant_job,
+    schedule_native_job,
     sync_sheet_job,
 )
 from dk_publishing.entrypoints.dagster_defs.resources import ServicesResource, SheetSyncResource
@@ -35,6 +36,7 @@ def build_definitions(
             prepare_variant_job,
             publish_variant_job,
             reconcile_variant_job,
+            schedule_native_job,
             expire_variant_job,
             housekeeping,
             sync_sheet_job,

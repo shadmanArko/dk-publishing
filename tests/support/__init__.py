@@ -20,6 +20,8 @@ H = timedelta(hours=1)
 
 # Prepare-then-publish path, 2 hour deadline: what most platforms use.
 CAPS = Capabilities(None, 30 * MIN, 24 * H, True, 2 * H)
+# A platform that can also hold a post and publish it itself (10 minutes to 30 days ahead).
+NATIVE_CAPS = Capabilities((10 * MIN, timedelta(days=30)), 5 * MIN, None, False, 2 * H)
 
 
 class FakeClock:
@@ -55,14 +57,18 @@ class ScriptedPublisher:
         prepare: Sequence[object] = (),
         publish: Sequence[object] = (),
         find_live: Sequence[object] = (),
+        schedule: Sequence[object] = (),
+        cancel: Sequence[object] = (),
     ) -> None:
         self.inner = inner
         self._scripts = {
             "prepare": deque(prepare),
             "publish": deque(publish),
             "find_live": deque(find_live),
+            "schedule": deque(schedule),
+            "cancel": deque(cancel),
         }
-        self.calls = {"prepare": 0, "publish": 0, "find_live": 0}
+        self.calls = {"prepare": 0, "publish": 0, "find_live": 0, "schedule": 0, "cancel": 0}
         self._lock = threading.Lock()
 
     @property
@@ -80,6 +86,14 @@ class ScriptedPublisher:
 
     def find_live(self, snapshot: VariantSnapshot, handle: Handle | None) -> LivePost | None:
         return self._run("find_live", lambda: self.inner.find_live(snapshot, handle))
+
+    def schedule(
+        self, snapshot: VariantSnapshot, media: Sequence[Rendition], at: datetime
+    ) -> Handle:
+        return self._run("schedule", lambda: self.inner.schedule(snapshot, media, at))  # type: ignore[attr-defined]
+
+    def cancel(self, handle: Handle) -> None:
+        self._run("cancel", lambda: self.inner.cancel(handle))  # type: ignore[attr-defined]
 
     def _run(self, method: str, call: Callable[[], T]) -> T:
         with self._lock:

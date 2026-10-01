@@ -7,7 +7,6 @@ vault replaces this when the connect flow exists.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import replace
 from pathlib import Path
 
 import httpx
@@ -28,8 +27,7 @@ def build_live_publisher(
     env: Mapping[str, str],
     transport: httpx.BaseTransport | None = None,
 ) -> Publisher:
-    # Native scheduling is not built, so a live post is published by this system at its slot.
-    caps = replace(settings.capabilities, native_window=None)
+    caps = settings.capabilities  # each row's `delivery` choice decides whether the window is used
     if name == "facebook":
         one_file = env.get("META_CREDENTIALS_FILE", "").strip()
         if one_file:

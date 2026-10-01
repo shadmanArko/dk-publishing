@@ -61,4 +61,8 @@
   config is dry_run everywhere, and a test asserts it, so nothing posts by accident.
 - Media for live platforms is downloaded from Drive during `prepare` (`DriveMediaStore`, named by checksum, verified
   against the approved md5). No transcoding yet. A checksum mismatch is `Retryable`: the next sync will notice the edit.
-- Not built: native scheduling and the per-row `delivery` choice, Instagram/Threads/YouTube adapters, the token vault.
+- Not built: Instagram/Threads/YouTube adapters, the token vault, Reels.
+- **Delivery** (ADR 0017): a row's `delivery` is `direct` (we publish at the slot) or `native` (the platform holds the
+  post). `planning_caps()` hides a platform's native window unless the row says `native`; every `plan_next(APPROVED)` must
+  use it. Rules that must not regress: withdraw at the platform BEFORE changing a natively scheduled variant, never cancel
+  at or after the slot, and never retry an uncertain schedule (it FAILS for a person: a hidden copy may exist).

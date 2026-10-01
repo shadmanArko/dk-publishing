@@ -18,6 +18,7 @@ from dk_publishing.entrypoints.dagster_defs.jobs import (
     prepare_variant_job,
     publish_variant_job,
     reconcile_variant_job,
+    schedule_native_job,
     sync_sheet_job,
 )
 from dk_publishing.entrypoints.dagster_defs.resources import ServicesResource, SheetSyncResource
@@ -26,10 +27,11 @@ BATCH = 50
 
 JOB_FOR_ACTION: dict[Action, JobDefinition] = {
     Action.PREPARE: prepare_variant_job,
+    Action.SCHEDULE_NATIVE: schedule_native_job,
     Action.PUBLISH: publish_variant_job,
     Action.RECONCILE: reconcile_variant_job,
     Action.EXPIRE: expire_variant_job,
-}  # fetch_media and schedule_native have no job until the media and native slices
+}  # fetch_media has no job until the media pipeline slice
 
 
 def run_request(due: DueAction) -> RunRequest:

@@ -6,7 +6,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from types import TracebackType
-from typing import Any, Protocol, Self
+from typing import Any, Protocol, Self, runtime_checkable
 
 from dk_publishing.domain.attempt import Outcome, Phase
 from dk_publishing.domain.capabilities import Capabilities
@@ -47,6 +47,22 @@ class Publisher(Protocol):
     def find_live(self, snapshot: VariantSnapshot, handle: Handle | None) -> LivePost | None:
         """Ask the platform whether the post exists. None means confirmed not live; if the
         platform cannot answer, raise instead of returning None."""
+
+
+@runtime_checkable
+class NativeScheduler(Protocol):
+    """A platform that can hold a post and publish it at a future time by itself.
+
+    `schedule` is a write that cannot be undone by retrying it: an uncertain outcome leaves a
+    scheduled post that this system cannot see, so it is failed for a person to check, never
+    retried. `cancel` must succeed quietly if the scheduled post is already gone.
+    """
+
+    def schedule(
+        self, snapshot: VariantSnapshot, media: Sequence[Rendition], at: datetime
+    ) -> Handle: ...
+
+    def cancel(self, handle: Handle) -> None: ...
 
 
 class PublisherRegistry(Protocol):

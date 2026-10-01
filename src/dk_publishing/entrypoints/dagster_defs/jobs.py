@@ -7,6 +7,7 @@ from dagster import Config, Failure, JobDefinition, OpExecutionContext, job, op
 from dk_publishing.application.services import Services
 from dk_publishing.application.use_cases.dispatch import expire_variant
 from dk_publishing.application.use_cases.housekeeping import (
+    fail_stale_scheduling,
     flag_stale_publishing,
     recover_stale_preparing,
 )
@@ -14,6 +15,7 @@ from dk_publishing.application.use_cases.prepare import prepare_variant
 from dk_publishing.application.use_cases.publish import publish_variant
 from dk_publishing.application.use_cases.reconcile import reconcile_variant
 from dk_publishing.application.use_cases.results import RunResult
+from dk_publishing.application.use_cases.schedule_native import schedule_native_variant
 from dk_publishing.application.use_cases.sync_sheet import sync_sheet
 from dk_publishing.entrypoints.dagster_defs.resources import ServicesResource, SheetSyncResource
 
@@ -37,6 +39,7 @@ def _action_job(name: str, use_case: Callable[[Services, str, int], RunResult]) 
 
 
 prepare_variant_job = _action_job("prepare_variant", prepare_variant)
+schedule_native_job = _action_job("schedule_native", schedule_native_variant)
 publish_variant_job = _action_job("publish_variant", publish_variant)
 reconcile_variant_job = _action_job("reconcile_variant", reconcile_variant)
 expire_variant_job = _action_job("expire_variant", expire_variant)
@@ -46,6 +49,9 @@ expire_variant_job = _action_job("expire_variant", expire_variant)
 def housekeeping_op(context: OpExecutionContext, services: ServicesResource) -> None:
     svc = services.services()
     uncertain, reprepared = flag_stale_publishing(svc), recover_stale_preparing(svc)
+    stuck = fail_stale_scheduling(svc)
+    if stuck:
+        context.log.warning(f"runs died while scheduling; check the platform for copies: {stuck}")
     if uncertain:
         context.log.warning(f"runs died mid-publish, now being reconciled: {uncertain}")
     context.log.info(f"housekeeping: {len(uncertain)} uncertain, {len(reprepared)} re-prepared")

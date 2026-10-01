@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import replace
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -75,9 +74,9 @@ def build_services(
             publishers[name] = build_live_publisher(name, settings, env, transport)
             live = True
         elif settings.mode is Mode.DRY_RUN:
-            # Native scheduling is not built, so a dry run uses the prepare-then-publish path.
-            caps = replace(settings.capabilities, native_window=None)
-            publishers[name] = DryRunPublisher(name, caps, ledger)
+            publishers[name] = DryRunPublisher(
+                name, settings.capabilities, ledger, clock=SystemClock()
+            )
         else:
             raise ConfigError(
                 f"platform {name!r} is {settings.mode.value!r} but no such adapter is built yet; "

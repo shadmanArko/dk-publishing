@@ -14,6 +14,7 @@ from dk_publishing.application.services import Services
 from dk_publishing.application.use_cases.approve import approve
 from dk_publishing.application.use_cases.prepare import prepare_variant
 from dk_publishing.application.use_cases.results import RunResult
+from dk_publishing.domain.capabilities import Capabilities
 from dk_publishing.domain.model import Actor, ActorKind, Variant
 from dk_publishing.domain.status import VariantStatus
 from tests.integration.conftest import TENANT, Seed
@@ -27,13 +28,15 @@ SLOT = T0 + 3 * H
 
 
 class Rig:
-    def __init__(self, conninfo: str, seed: Seed, **script: object) -> None:
+    def __init__(
+        self, conninfo: str, seed: Seed, *, caps: Capabilities = CAPS, **script: object
+    ) -> None:
         self.conninfo = conninfo
         self.seed = seed
         self.clock = FakeClock()
         self.ledger = PostgresLedger(conninfo)
         self.publisher = ScriptedPublisher(
-            DryRunPublisher("p", CAPS, self.ledger),
+            DryRunPublisher("p", caps, self.ledger, clock=self.clock),
             **script,  # type: ignore[arg-type]
         )
         self.services = Services(

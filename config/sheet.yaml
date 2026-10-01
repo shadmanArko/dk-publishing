@@ -47,6 +47,7 @@ platform_extras:
   facebook:
     - {name: format, kind: dropdown, options: [post, photo, video, reel], required: true}
     - {name: link, kind: text, note: "Optional link attached to the post."}
+    - {name: delivery, kind: dropdown, options: [direct, native], note: "Blank = direct. direct: this system publishes at the slot. native: the platform holds the post and publishes it itself at the slot, even if this system is off (the slot must be at least 10 minutes away). Withdrawing or editing the row removes it from the platform first."}
   threads:
     - {name: format, kind: dropdown, options: [text, image, carousel, video], required: true}
     - {name: reply_control, kind: dropdown, options: [everyone, accounts_you_follow, mentioned_only]}
@@ -61,6 +62,7 @@ platform_extras:
     - {name: category, kind: dropdown, options: [People & Blogs, Entertainment, Howto & Style, Education, News & Politics, Travel & Events]}
     - {name: visibility_after_publish, kind: dropdown, options: [public, unlisted, private]}
     - {name: made_for_kids, kind: dropdown, options: ["yes", "no"], required: true, note: "YouTube requires an explicit answer for every video."}
+    - {name: delivery, kind: dropdown, options: [direct, native], note: "Blank = direct. direct: this system publishes at the slot. native: the platform holds the post and publishes it itself at the slot, even if this system is off (the slot must be at least 10 minutes away). Withdrawing or editing the row removes it from the platform first."}
   reddit:
     - {name: subreddit, kind: list, list: subreddits, required: true, note: "Without the r/ prefix."}
     - {name: title, kind: text, required: true}
@@ -109,6 +111,10 @@ readme:
   - "   Leave caption and slot blank to use the defaults from the Posts tab."
   - "3. Put the media files in the Drive folder 'DK Publishing Media'. The name in the media column must match exactly."
   - "4. When everything is right, tick ready on the Posts tab. That approves the post for every platform you enabled."
+  - ""
+  - "Every platform tab has its own slot, so one post can go out at different times on different platforms."
+  - "Where a platform tab has a delivery column: direct means this system publishes at the slot; native means"
+  - "the platform holds the post and publishes it itself, even if this system is off (needs the slot 10+ minutes ahead)."
   - ""
   - "Times are Berlin local time and must be real date-time cells, for example 14.11.2026 18:00."
   - "The hour that does not exist (spring) or happens twice (autumn) on the clock-change night is rejected."

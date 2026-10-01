@@ -1,14 +1,16 @@
 """Publish to a Facebook Page through the Graph API.
 
-This version publishes directly at the slot. Native scheduling (letting Facebook hold the post)
-comes with the per-row `delivery` choice. A video is uploaded inside `publish`, so a large file
-adds to the lateness; uploading ahead as a draft is a later optimisation.
+Two ways to get a post out, chosen per row by `delivery`:
+- direct: this system publishes at the slot. A video is uploaded inside `publish`, so a large
+  file adds to the lateness.
+- native: Facebook is given the post now (`published=false` plus `scheduled_publish_time`) and
+  publishes it itself at the slot, even if this system is off. Text posts and videos only.
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -69,6 +71,13 @@ class FacebookPublisher:
             problems.extend(_media_problems(fmt, names))
         if content.get("link") and fmt != "post":
             problems.append(Violation("link", "A link can only be attached to a text post."))
+        delivery = str(content.get("delivery") or "direct")
+        if delivery == "native" and fmt == "photo":
+            problems.append(
+                Violation(
+                    "delivery", "Native scheduling supports text posts and videos; use direct."
+                )
+            )
         return problems
 
     # --- prepare ---------------------------------------------------------------------------
@@ -104,31 +113,58 @@ class FacebookPublisher:
     # --- publish ---------------------------------------------------------------------------
 
     def publish(self, handle: Handle) -> LivePost:
+        result = self._send(handle, scheduled_at=None)
+        return self._live(result["id"], video_page=result.get("video_page"))
+
+    def schedule(
+        self, snapshot: VariantSnapshot, media: Sequence[Rendition], at: datetime
+    ) -> Handle:
+        """Give Facebook the post to publish at `at`. Facebook needs 10 minutes to 30 days."""
+        handle = self.prepare(snapshot, media)
+        result = self._send(handle, scheduled_at=at)
+        return {**handle, "scheduled_id": result["id"], "scheduled_for": at.isoformat()}
+
+    def cancel(self, handle: Handle) -> None:
+        """Delete the scheduled post. A post that is already gone counts as cancelled."""
+        scheduled_id = handle.get("scheduled_id")
+        if not scheduled_id:
+            raise Rejected("nothing was scheduled for this variant")
+        try:
+            self._graph.delete(str(scheduled_id))
+        except Rejected as exc:
+            if "(Meta code 100)" not in str(exc):  # code 100: it no longer exists
+                raise
+
+    def _send(self, handle: Handle, scheduled_at: datetime | None) -> dict[str, Any]:
+        """One create call: publish now, or hold for `scheduled_at`. Returns `{"id", ...}`."""
         kind, message = handle.get("kind"), str(handle.get("message") or "")
         files = list(handle.get("files") or [])
         page = handle.get("page_id") or self._page
+        hold: dict[str, Any] = {"published": "true"}
+        if scheduled_at is not None:
+            hold = {
+                "published": "false",
+                "scheduled_publish_time": str(int(scheduled_at.astimezone(UTC).timestamp())),
+            }
         if kind == "post":
-            data: dict[str, Any] = {"message": message}
+            data: dict[str, Any] = {"message": message, **hold}
             if handle.get("link"):
                 data["link"] = handle["link"]
-            result = self._graph.post(f"{page}/feed", data)
-            return self._live(result["id"])
+            return self._graph.post(f"{page}/feed", data)
         if kind in ("photo", "video") and files:
             with open(files[0], "rb") as handle_file:
                 if kind == "photo":
                     result = self._graph.post(
-                        f"{page}/photos",
-                        {"caption": message, "published": "true"},
-                        file=("source", handle_file),
+                        f"{page}/photos", {"caption": message, **hold}, file=("source", handle_file)
                     )
-                    return self._live(result.get("post_id") or result["id"])
+                    return {"id": result.get("post_id") or result["id"]}
                 result = self._graph.post(
                     f"{page}/videos",
-                    {"description": message, "published": "true"},
+                    {"description": message, **hold},
                     file=("source", handle_file),
                     video=True,
                 )
-            return self._live(result["id"], video_page=page)
+            return {"id": result["id"], "video_page": page}
         raise Rejected("this prepared post is missing what it needs to be published")
 
     def _live(self, post_id: str, video_page: str | None = None) -> LivePost:
@@ -155,6 +191,8 @@ class FacebookPublisher:
         """Is this post on the Page? None means confirmed not there. If Facebook cannot answer,
         this raises, so the variant is checked by hand instead of guessed at."""
         fmt = str(snapshot.content.get("format"))
+        if handle and handle.get("scheduled_id"):
+            return self._scheduled_is_live(str(handle["scheduled_id"]), fmt)
         message = str(snapshot.content.get("caption") or "").strip()
         since = snapshot.publish_at - LOOKBACK
         edge, field = ("videos", "description") if fmt == "video" else ("feed", "message")
@@ -169,6 +207,18 @@ class FacebookPublisher:
             if _created(item) >= since:
                 return self._live_from(item)
         return None
+
+    def _scheduled_is_live(self, scheduled_id: str, fmt: str) -> LivePost | None:
+        """Has Facebook published the post it was holding? Asked by id, so the answer does not
+        depend on captions or on what created_time means for a scheduled post."""
+        flag = "published" if fmt == "video" else "is_published"
+        item = self._graph.get(scheduled_id, {"fields": f"{flag},permalink_url"})
+        if not item.get(flag):
+            return None
+        link = item.get("permalink_url")
+        if isinstance(link, str) and link.startswith("/"):
+            link = f"https://www.facebook.com{link}"
+        return LivePost(scheduled_id, link if isinstance(link, str) else None)
 
     @staticmethod
     def _live_from(item: Mapping[str, Any]) -> LivePost:

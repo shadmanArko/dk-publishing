@@ -115,6 +115,14 @@ class GraphClient:
             timeout=self._upload if file else self._read,
         )
 
+    def delete(self, path: str) -> dict[str, Any]:
+        """Remove something. Repeating it is harmless (it is already gone), so server trouble
+        is simply Retryable."""
+        params = {"access_token": self._tokens.token()}
+        return self._send(
+            "DELETE", f"{GRAPH}/{self._version}/{path}", idempotent=True, params=params
+        )
+
     def _send(
         self,
         method: str,

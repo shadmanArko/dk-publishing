@@ -9,6 +9,7 @@ class RunResult(StrEnum):
     APPROVED = "approved"
     INVALID = "invalid"
     PREPARED = "prepared"
+    SCHEDULED = "scheduled"  # handed to the platform, which will publish it at the slot
     PUBLISHED = "published"
     RETRY_SCHEDULED = "retry_scheduled"
     PARKED = "parked"  # needs a person (re-authorise the account); nothing is scheduled

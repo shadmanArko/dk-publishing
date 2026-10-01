@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import timedelta
 
 ZERO = timedelta(0)
@@ -27,3 +27,12 @@ class Capabilities:
             raise ValueError("max_lateness must be positive")
         if self.prepared_ttl is not None and self.prepare_lead >= self.prepared_ttl:
             raise ValueError("prepare_lead must stay below the prepared handle's lifetime")
+
+
+def for_delivery(caps: Capabilities, delivery: str | None) -> Capabilities:
+    """The capabilities the planner should use for one variant.
+
+    Native scheduling (the platform holds the post and publishes it) happens only when the row asks
+    for `delivery: native`. Anything else is published by this system at the slot.
+    """
+    return caps if delivery == "native" else replace(caps, native_window=None)

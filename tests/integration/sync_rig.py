@@ -6,10 +6,11 @@ from datetime import datetime, timedelta
 from dk_publishing.application.ports import SyncVariant
 from dk_publishing.application.services import SyncServices
 from dk_publishing.application.use_cases.sync_sheet import SyncReport, sync_sheet
+from dk_publishing.domain.capabilities import Capabilities
 from dk_publishing.domain.timezones import utc_to_berlin
 from tests.integration.conftest import TENANT, Seed
 from tests.integration.rig import Rig
-from tests.support import T0
+from tests.support import CAPS, T0
 from tests.support.memory_sheet import FakeMedia, MemorySheet
 
 
@@ -19,8 +20,10 @@ def berlin_in(hours: float) -> datetime:
 
 
 class SyncRig(Rig):
-    def __init__(self, conninfo: str, seed: Seed, **script: object) -> None:
-        super().__init__(conninfo, seed, **script)
+    def __init__(
+        self, conninfo: str, seed: Seed, *, caps: Capabilities = CAPS, **script: object
+    ) -> None:
+        super().__init__(conninfo, seed, caps=caps, **script)
         self.sheet = MemorySheet()
         self.media = FakeMedia("reel.mp4")
         self.sync_services = SyncServices(

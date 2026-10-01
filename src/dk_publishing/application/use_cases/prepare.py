@@ -1,7 +1,14 @@
 from __future__ import annotations
 
 from dk_publishing.application.services import Services
-from dk_publishing.application.use_cases._common import S, expire, move, own, settle_failure
+from dk_publishing.application.use_cases._common import (
+    S,
+    expire,
+    move,
+    own,
+    planning_caps,
+    settle_failure,
+)
 from dk_publishing.application.use_cases.results import RunResult
 from dk_publishing.domain.attempt import Outcome, Phase
 from dk_publishing.domain.errors import IntegrityError
@@ -63,7 +70,7 @@ def prepare_variant(services: Services, variant_id: str, expected_version: int) 
                 attempt_id=attempt_id,
                 phase=Phase.PREPARE,
                 resting=S.APPROVED,
-                caps=caps,
+                caps=planning_caps(publisher, content),
                 now=finished,
             )
         else:

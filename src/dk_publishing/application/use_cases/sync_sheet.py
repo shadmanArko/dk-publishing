@@ -14,8 +14,9 @@ from typing import Any
 
 from dk_publishing.application.ports import AccountInfo, SyncVariant
 from dk_publishing.application.services import Services, SyncServices
-from dk_publishing.application.use_cases._common import move
+from dk_publishing.application.use_cases._common import delivery_problems, move
 from dk_publishing.application.use_cases.approve import approve
+from dk_publishing.application.use_cases.native import withdraw_native
 from dk_publishing.application.use_cases.results import RunResult
 from dk_publishing.domain.model import Actor, ActorKind, Variant
 from dk_publishing.domain.publishing import VariantSnapshot, Violation
@@ -232,6 +233,8 @@ def _desire(
             "pending", tenant, row.platform, account.id, publish_at or now, content
         )
         problems.extend(publisher.validate(probe))
+        if publish_at is not None:
+            problems.extend(delivery_problems(publisher, content, publish_at, now))
 
     if not row.enabled:
         problems = []  # a switched-off row is not asked to be valid
@@ -274,6 +277,10 @@ def _cancel(
     # Record what the row looked like when it was cancelled (or that it was removed), so that
     # putting the row back, or re-ticking `enabled`, counts as an edit and revives the post.
     marker = d.source_hash if d else REMOVED
+    # A post the platform is holding must be taken back first, or it would still go out.
+    if not withdraw_native(core, sv.variant, now):
+        report.busy += 1  # past its slot: the platform may have published it; reconcile decides
+        return
     with core.uow() as uow:
         variant: Variant | None = sv.variant
         for target in cancel_path(sv.variant.status):
@@ -327,6 +334,9 @@ def _reconcile(
                 uow.commit()
         elif step is Step.RESET_TO_DRAFT:
             assert variant is not None
+            if not withdraw_native(core, variant, now):
+                report.busy += 1
+                return
             variant = _move(
                 core, variant, S.DRAFT, now, "row edited; approval withdrawn, checking again", d
             )

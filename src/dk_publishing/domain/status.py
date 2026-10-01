@@ -37,7 +37,8 @@ ALLOWED: MappingProxyType[VariantStatus, frozenset[VariantStatus]] = MappingProx
         S.PREPARING: frozenset({S.PREPARED, S.APPROVED, S.FAILED}),
         S.PREPARED: frozenset({S.PUBLISHING, S.APPROVED, S.CANCELLED, S.EXPIRED, S.DRAFT}),
         S.SCHEDULING_NATIVE: frozenset({S.SCHEDULED_NATIVE, S.APPROVED, S.FAILED}),
-        S.SCHEDULED_NATIVE: frozenset({S.PUBLISHED, S.UNKNOWN, S.CANCELLED, S.DRAFT}),
+        # FAILED: the platform did not publish a post it was holding for us.
+        S.SCHEDULED_NATIVE: frozenset({S.PUBLISHED, S.UNKNOWN, S.CANCELLED, S.DRAFT, S.FAILED}),
         S.PUBLISHING: frozenset({S.PUBLISHED, S.UNKNOWN, S.PREPARED, S.FAILED}),
         S.UNKNOWN: frozenset({S.PUBLISHED, S.PREPARED, S.FAILED}),
         # Live is final. Editing a failed, cancelled or expired row starts a fresh draft.

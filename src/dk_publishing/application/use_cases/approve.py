@@ -4,7 +4,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from dk_publishing.application.services import Services
-from dk_publishing.application.use_cases._common import S, move
+from dk_publishing.application.use_cases._common import S, delivery_problems, move, planning_caps
 from dk_publishing.application.use_cases.results import RunResult
 from dk_publishing.domain.model import Actor
 from dk_publishing.domain.planning import plan_next
@@ -23,7 +23,10 @@ def approve(
             return RunResult.SKIPPED, []
         publisher = services.publishers.for_platform(variant.platform)
 
-        violations = publisher.validate(snapshot_for(variant, content))
+        violations = [
+            *publisher.validate(snapshot_for(variant, content)),
+            *delivery_problems(publisher, content, variant.publish_at, now),
+        ]
         if violations:
             reason = "; ".join(f"{v.field}: {v.message}" for v in violations)
             if variant.status is S.DRAFT:
@@ -34,7 +37,7 @@ def approve(
         step = plan_next(
             status=S.APPROVED,
             publish_at=variant.publish_at,
-            caps=publisher.capabilities,
+            caps=planning_caps(publisher, content),
             now=now,
             media_ready=True,  # the media pipeline arrives in a later slice
         )

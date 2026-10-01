@@ -16,6 +16,10 @@ def reconcile_variant(services: Services, variant_id: str, expected_version: int
     Live -> published. Confirmed not live -> back to prepared, where the planner either
     republishes or expires it. If the platform cannot answer, the variant fails and a person
     checks by hand: guessing either way risks a duplicate or a silent loss.
+
+    The same question verifies a natively scheduled post once its slot has passed. There "not
+    live" cannot mean "publish it ourselves" (the platform still holds or has dropped it), so
+    it fails for a person to look at.
     """
     now = services.clock.now()
     with services.uow() as uow:
@@ -23,9 +27,9 @@ def reconcile_variant(services: Services, variant_id: str, expected_version: int
         if (
             variant is None
             or variant.version != expected_version
-            or variant.status is not S.UNKNOWN
+            or variant.status not in (S.UNKNOWN, S.SCHEDULED_NATIVE)
         ):
-            return RunResult.SKIPPED  # native-schedule verification arrives with native scheduling
+            return RunResult.SKIPPED
         publisher = services.publishers.for_platform(variant.platform)
         content = uow.variants.snapshot_of(variant_id)
         if content is None:
@@ -51,6 +55,7 @@ def reconcile_variant(services: Services, variant_id: str, expected_version: int
 
     finished = services.clock.now()
     caps = publisher.capabilities
+    scheduled = variant.status is S.SCHEDULED_NATIVE
     with services.uow() as uow:
         if error is not None:
             outcome, code, _ = classify(error)
@@ -82,6 +87,20 @@ def reconcile_variant(services: Services, variant_id: str, expected_version: int
                 live=live,
             )
             result = RunResult.PUBLISHED
+        elif scheduled:
+            uow.attempts.finish(attempt_id, outcome=Outcome.OK, finished_at=finished)
+            moved = move(
+                uow,
+                variant,
+                S.FAILED,
+                at=finished,
+                next_step=None,
+                reason=(
+                    "the platform did not publish the post it was holding for this slot. "
+                    "Check its scheduled posts, then edit this row to try again"
+                ),
+            )
+            result = RunResult.FAILED
         else:
             uow.attempts.finish(attempt_id, outcome=Outcome.OK, finished_at=finished)
             step = plan_next(

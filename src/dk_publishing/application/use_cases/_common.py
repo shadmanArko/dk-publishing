@@ -7,19 +7,58 @@ from dataclasses import replace
 from datetime import datetime, timedelta
 from typing import Any
 
-from dk_publishing.application.ports import Handle, UnitOfWork
+from dk_publishing.application.ports import Handle, NativeScheduler, Publisher, UnitOfWork
 from dk_publishing.application.use_cases.results import RunResult
 from dk_publishing.domain import errors
 from dk_publishing.domain.attempt import Outcome, Phase
-from dk_publishing.domain.capabilities import Capabilities
+from dk_publishing.domain.capabilities import Capabilities, for_delivery
 from dk_publishing.domain.lifecycle import transition
 from dk_publishing.domain.model import Actor, ActorKind, Variant
 from dk_publishing.domain.planning import NextStep, deadline, plan_next, retry_at
-from dk_publishing.domain.publishing import LivePost
+from dk_publishing.domain.publishing import LivePost, Violation
 from dk_publishing.domain.status import VariantStatus
 
 SCHEDULER = Actor(ActorKind.SYSTEM, "scheduler")
 S = VariantStatus
+
+
+DELIVERIES = ("direct", "native")
+
+
+def delivery_of(content: Mapping[str, Any] | None) -> str:
+    return str((content or {}).get("delivery") or "direct")
+
+
+def planning_caps(publisher: Publisher, content: Mapping[str, Any] | None) -> Capabilities:
+    """The capabilities to plan this variant with, honouring its `delivery` choice."""
+    return for_delivery(publisher.capabilities, delivery_of(content))
+
+
+def delivery_problems(
+    publisher: Publisher, content: Mapping[str, Any], publish_at: datetime, now: datetime
+) -> list[Violation]:
+    """Plain-language reasons the chosen delivery cannot work, checked before approval."""
+    delivery = delivery_of(content)
+    if delivery not in DELIVERIES:
+        return [Violation("delivery", f"delivery must be one of: {', '.join(DELIVERIES)}.")]
+    if delivery != "native":
+        return []
+    window = publisher.capabilities.native_window
+    if not isinstance(publisher, NativeScheduler) or window is None:
+        return [
+            Violation("delivery", "This platform cannot hold scheduled posts. Use direct instead.")
+        ]
+    shortest = window[0]
+    if publish_at - now < shortest:
+        minutes = int(shortest.total_seconds() // 60)
+        return [
+            Violation(
+                "delivery",
+                f"Native scheduling needs the slot at least {minutes} minutes from now. "
+                "Move the slot later, or use direct.",
+            )
+        ]
+    return []
 
 
 def move(
@@ -133,6 +172,21 @@ def settle_failure(
                 next_step=None,
             )
         )
+        return RunResult.FAILED
+
+    if outcome is Outcome.UNKNOWN and phase is Phase.SCHEDULE_NATIVE:
+        # The platform may now be holding a scheduled copy this system cannot see. Scheduling
+        # again could publish the post twice, so a person checks instead.
+        own(
+            move(
+                uow, in_flight, S.FAILED, at=now, next_step=None,
+                reason=(
+                    "It is uncertain whether the platform scheduled this post. Check its "
+                    "scheduled posts and delete any copy by hand, then edit this row to try "
+                    f"again: {error}"
+                ),
+            )
+        )  # fmt: skip
         return RunResult.FAILED
 
     if outcome is Outcome.UNKNOWN and phase is Phase.PUBLISH:
