@@ -7,9 +7,10 @@ from typing import Any
 import psycopg
 from psycopg.types.json import Jsonb
 
-from dk_publishing.application.ports import DueAction
+from dk_publishing.application.ports import DueAction, Handle
 from dk_publishing.domain.model import Actor, ActorKind, Variant, VariantEvent
 from dk_publishing.domain.planning import Action, NextStep
+from dk_publishing.domain.publishing import LivePost
 from dk_publishing.domain.snapshot import snapshot_hash
 from dk_publishing.domain.status import VariantStatus
 
@@ -73,6 +74,20 @@ class PostgresVariantRepository:
         ).fetchone()
         return None if row is None else row[0]
 
+    def handle_of(self, variant_id: str) -> Handle | None:
+        row = self._conn.execute(
+            "SELECT native_handle FROM publishing.variants WHERE id = %s::uuid", (variant_id,)
+        ).fetchone()
+        return None if row is None else row[0]
+
+    def stale(self, status: VariantStatus, updated_before: datetime, limit: int) -> list[Variant]:
+        rows = self._conn.execute(
+            f"""SELECT {_VARIANT_COLUMNS} FROM publishing.variants
+               WHERE status = %s AND updated_at < %s ORDER BY updated_at, id LIMIT %s""",
+            (status.value, updated_before, limit),
+        ).fetchall()
+        return [_variant(r) for r in rows]
+
     def events(self, variant_id: str) -> list[VariantEvent]:
         rows = self._conn.execute(
             """SELECT variant_id::text, seq, from_status, to_status, actor_kind, actor_name,
@@ -101,6 +116,8 @@ class PostgresVariantRepository:
         next_step: NextStep | None,
         *,
         snapshot: Mapping[str, Any] | None = None,
+        handle: Handle | None = None,
+        live: LivePost | None = None,
     ) -> bool:
         _check_consistent(old, new, event, snapshot)
 
@@ -111,7 +128,7 @@ class PostgresVariantRepository:
             "snapshot_hash = %s",
             "next_action = %s",
             "next_action_at = %s",
-            "updated_at = now()",
+            "updated_at = %s",
         ]
         params: list[Any] = [
             new.status.value,
@@ -120,15 +137,24 @@ class PostgresVariantRepository:
             new.snapshot_hash,
             None if next_step is None else next_step.action.value,
             None if next_step is None else next_step.at,
+            event.at,  # the domain clock, so staleness is testable and consistent
         ]
         if new.snapshot_hash is None:
             sets.append("snapshot = NULL")
         elif snapshot is not None:
             sets.append("snapshot = %s")
             params.append(Jsonb(snapshot))
+        if new.status is VariantStatus.DRAFT:
+            sets.append("native_handle = NULL")  # an edit invalidates anything prepared
+        elif handle is not None:
+            sets.append("native_handle = %s")
+            params.append(Jsonb(handle))
         if new.status is VariantStatus.PUBLISHED:
             sets.append("published_at = %s")
             params.append(event.at)
+            if live is not None:
+                sets.extend(["external_id = %s", "external_url = %s"])
+                params.extend([live.external_id, live.url])
 
         # The compare-and-set. Under READ COMMITTED a racing writer blocks on the row lock, then
         # re-checks this WHERE against the winner's committed row and matches nothing.

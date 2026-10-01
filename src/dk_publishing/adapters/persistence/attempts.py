@@ -65,3 +65,24 @@ class PostgresAttemptRepository:
         )
         if cursor.rowcount == 0:
             raise LookupError(f"no attempt {attempt_id}")
+
+    def finish_open(
+        self, variant_id: str, *, outcome: Outcome, finished_at: datetime, error_code: str
+    ) -> int:
+        cursor = self._conn.execute(
+            """UPDATE publishing.publish_attempts
+               SET outcome = %s, finished_at = %s, error_code = %s
+               WHERE variant_id = %s::uuid AND outcome IS NULL""",
+            (outcome.value, finished_at, error_code, variant_id),
+        )
+        return cursor.rowcount
+
+    def failures(self, variant_id: str, phase: Phase) -> int:
+        row = self._conn.execute(
+            """SELECT count(*) FROM publishing.publish_attempts
+               WHERE variant_id = %s::uuid AND phase = %s
+                 AND outcome IN ('retryable', 'rate_limited', 'unknown')""",
+            (variant_id, phase.value),
+        ).fetchone()
+        assert row is not None
+        return int(row[0])

@@ -31,3 +31,10 @@ class Rejected(PublishingError):
 
 class UnknownOutcome(PublishingError):
     """The request may or may not have taken effect. Never retry blindly: reconcile first."""
+
+
+class IntegrityError(Exception):
+    """Stored data contradicts itself (for example a snapshot that no longer matches its hash).
+
+    Not a platform outcome and never retried: the run fails loudly and nothing is sent.
+    """

@@ -23,6 +23,7 @@ EXPECTED_TABLES = {
     "media_assets",
     "renditions",
     "channel_settings",
+    "dry_run_posts",  # the rehearsal ledger; not one of the plan's eleven
 }
 
 
@@ -32,7 +33,7 @@ def test_applies_in_order_and_a_second_run_is_a_no_op(fresh_conninfo: str) -> No
     assert apply_migrations(fresh_conninfo, MIGRATIONS) == []
 
 
-def test_creates_exactly_the_eleven_tables(conninfo: str) -> None:
+def test_creates_exactly_the_expected_tables(conninfo: str) -> None:
     with psycopg.connect(conninfo) as conn:
         tables = {
             r[0]

@@ -18,3 +18,15 @@
 - **Integration tests need Postgres:** set `TEST_DATABASE_URL`, or have PostgreSQL binaries installed (a throwaway
   cluster is started automatically). Under `CI=true` a missing database fails the build instead of skipping.
 - `sheet_snapshots.cells` is named that because `values` is a reserved word (same trap as the harness's `orders`).
+- **Publish ordering is the duplicate guarantee** (`application/use_cases/publish.py`): CAS into `publishing` + intent
+  log, commit, *then* the platform call with no transaction open, then record the outcome. Never move the call inside a
+  transaction or before the commit. A run that dies leaves `publishing`; housekeeping -> `unknown` -> reconcile.
+- **Adapters raise the five domain errors.** A call that may have reached the platform raises `UnknownOutcome`, never
+  `Retryable`. Unexpected exceptions are treated as `UnknownOutcome` by the use cases. `find_live` returns None only
+  for "confirmed not live"; if the platform cannot answer it must raise.
+- **New adapter = subclass `tests/contract/publisher_contract.py::PublisherContract`.** Test doubles are in
+  `tests/support` (`ScriptedPublisher` injects failures, `SimulatedCrash` is a BaseException that kills a run).
+- **Dry-run mode** (`adapters/platforms/dry_run.py`) writes to `publishing.dry_run_posts`. It has no unique key on
+  variant on purpose: a duplicate must show up as two rows.
+- Use cases take `(services, variant_id, expected_version)`; a version mismatch returns `SKIPPED`, a lost
+  compare-and-set returns `LOST_RACE`. Both are normal. Use-case tests run against real Postgres, not in-memory fakes.
