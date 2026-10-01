@@ -12,3 +12,9 @@
 - **Separate from the harness repo** on purpose (ADR 0013). Never run anything that downgrades/reset this schema
   against a database holding live tokens or publish state.
 - Run `make check` before every commit.
+- **Migrations are forward-only** (ADR 0015). Never edit an applied `migrations/*.sql`; add a new file. There is no
+  downgrade. `variant_events` is append-only (trigger). Call `variants.apply()` for every state change: it is the
+  compare-and-set that prevents double publishing, and it returns False when you lost the race, so check it.
+- **Integration tests need Postgres:** set `TEST_DATABASE_URL`, or have PostgreSQL binaries installed (a throwaway
+  cluster is started automatically). Under `CI=true` a missing database fails the build instead of skipping.
+- `sheet_snapshots.cells` is named that because `values` is a reserved word (same trap as the harness's `orders`).

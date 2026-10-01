@@ -4,8 +4,12 @@ version = "0.1.0"
 description = "Dhaka Kacchi social publishing pipeline: schedule approved posts to eight platforms."
 requires-python = ">=3.12,<3.13"
 dependencies = [
+    "psycopg[binary]>=3.2",
     "tzdata>=2026.4",
 ]
+
+[project.scripts]
+dk = "dk_publishing.entrypoints.cli:main"
 
 [dependency-groups]
 dev = [
@@ -41,6 +45,9 @@ src = ["src", "tests"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["E501"]  # inline SQL reads better unwrapped
 
 [tool.mypy]
 strict = true
