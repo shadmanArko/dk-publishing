@@ -24,7 +24,7 @@ def env(monkeypatch: pytest.MonkeyPatch, *, skip: str | None = None) -> None:
 
 
 def fake_sync(monkeypatch: pytest.MonkeyPatch, report: SyncReport, seen: list[bool]) -> None:
-    monkeypatch.setattr(composition, "build_sync_services", lambda *a: object())
+    monkeypatch.setattr(composition, "build_sync_services", lambda *a, **k: object())
 
     def run(services: object, *, allow_cancellations: bool) -> SyncReport:
         seen.append(allow_cancellations)
@@ -98,7 +98,7 @@ def test_account_add_and_list(
     env(monkeypatch)
     added: list[tuple[str, str]] = []
 
-    def record(url: str, platform: str, name: str) -> str:
+    def record(url: str, platform: str, name: str, external_id: str | None = None) -> str:
         added.append((platform, name))
         return "id"
 
@@ -124,7 +124,7 @@ def test_account_add_failures_are_readable(
 ) -> None:
     env(monkeypatch)
 
-    def boom(*_: object) -> str:
+    def boom(*_: object, **__: object) -> str:
         raise error
 
     monkeypatch.setattr(composition, "add_account", boom)

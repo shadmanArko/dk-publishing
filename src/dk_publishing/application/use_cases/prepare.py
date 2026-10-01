@@ -43,7 +43,12 @@ def prepare_variant(services: Services, variant_id: str, expected_version: int) 
         uow.commit()  # ownership and intent are durable before the slow call; no lock is held
 
     try:
-        handle = publisher.prepare(snapshot_for(preparing, content), ())  # media: later slice
+        files = (
+            services.media_store.ensure_local(content.get("media") or [])
+            if services.media_store is not None
+            else []
+        )
+        handle = publisher.prepare(snapshot_for(preparing, content), files)
         error = None
     except Exception as exc:
         handle, error = None, exc

@@ -19,6 +19,7 @@ _UNITS = {"s": "seconds", "m": "minutes", "h": "hours", "d": "days"}
 _KNOWN = {
     "mode",
     "tab",
+    "api_version",
     "native_window",
     "prepare_lead",
     "prepared_ttl",
@@ -43,6 +44,7 @@ class PlatformSettings:
     mode: Mode
     capabilities: Capabilities
     tab: str  # the Google Sheet tab for this platform
+    api_version: str | None = None  # pinned platform API version, where the API has one
 
 
 def parse_duration(value: object) -> timedelta:
@@ -93,4 +95,7 @@ def _platform(name: str, entry: Mapping[str, Any]) -> PlatformSettings:
         pulls_media_by_url=bool(entry.get("pulls_media_by_url", False)),
         max_lateness=parse_duration(entry.get("max_lateness", "2h")),
     )
-    return PlatformSettings(mode, capabilities, str(entry.get("tab") or name))
+    version = entry.get("api_version")
+    return PlatformSettings(
+        mode, capabilities, str(entry.get("tab") or name), str(version) if version else None
+    )

@@ -44,6 +44,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     add = account_commands.add_parser("add", help="add a dry-run account")
     add.add_argument("platform")
     add.add_argument("name", help="display name, as it appears in the Sheet dropdown")
+    add.add_argument(
+        "--external-id", help="the platform's own account id (see the platform's docs)"
+    )
     rehearsal = commands.add_parser(
         "seed-rehearsal", help="create approved dry-run posts a few minutes from now"
     )
@@ -190,6 +193,7 @@ def _sync(*, allow_cancellations: bool) -> int:
             Path(env["GOOGLE_APPLICATION_CREDENTIALS"]).expanduser(),
             env["GOOGLE_SHEET_ID"],
             env["GOOGLE_DRIVE_FOLDER_ID"],
+            env=os.environ,
         )
         report = sync_sheet(services, allow_cancellations=allow_cancellations)
     except CredentialsError as exc:
@@ -226,7 +230,9 @@ def _account(args: argparse.Namespace) -> int:
             print(f"{a.platform:<10} {a.display_name or '(no name)':<30} {a.status}")
         return 0
     try:
-        composition.add_account(database_url, args.platform, args.name)
+        composition.add_account(
+            database_url, args.platform, args.name, external_id=args.external_id
+        )
     except (ConfigError, DuplicateAccount) as exc:
         print(f"[FAIL] {exc}", file=sys.stderr)
         return 1

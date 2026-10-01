@@ -53,3 +53,12 @@
 - More than 5 scheduled cancellations in one sync halts it (nothing applied, the Dagster run fails). Override with
   `dk sync --allow-cancellations`. Telegram will replace the failed-run signal later.
 - `dk sheet sample` / `dk account add` create dry-run accounts; real ones come from the (unbuilt) connect flow.
+- **Real platform adapters** (`adapters/platforms/meta.py`, `facebook.py`): `GraphClient` maps every Meta answer to the
+  five domain errors. A write whose answer is lost, or a 5xx on a write, is `UnknownOutcome` (never `Retryable`);
+  only reads and "could not connect" are safely retryable. Tokens ride in the POST body / GET query (Meta's documented
+  way) and are redacted from every message. Never log a URL or request body. See ADR 0016 and
+  `docs/runbooks/facebook-live-test.md`. `mode: live` is a deliberate switch in `config/platforms.yaml`: the shipped
+  config is dry_run everywhere, and a test asserts it, so nothing posts by accident.
+- Media for live platforms is downloaded from Drive during `prepare` (`DriveMediaStore`, named by checksum, verified
+  against the approved md5). No transcoding yet. A checksum mismatch is `Retryable`: the next sync will notice the edit.
+- Not built: native scheduling and the per-row `delivery` choice, Instagram/Threads/YouTube adapters, the token vault.

@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from dk_publishing.application.ports import (
     Clock,
     MediaCatalog,
+    MediaStore,
     PublisherRegistry,
     SheetGateway,
     UnitOfWork,
@@ -19,6 +20,7 @@ class Services:
     uow: Callable[[], UnitOfWork]  # a fresh unit of work (one connection, one transaction)
     publishers: PublisherRegistry
     clock: Clock
+    media_store: MediaStore | None = None  # None: platforms get no files (dry-run)
 
 
 @dataclass(frozen=True, slots=True)

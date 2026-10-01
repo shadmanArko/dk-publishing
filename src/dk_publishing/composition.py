@@ -8,15 +8,19 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+import httpx
+
 from dk_publishing.adapters.clock import SystemClock
 from dk_publishing.adapters.config.platforms import ConfigError, Mode, load_platforms
 from dk_publishing.adapters.config.sheet_layout import load_sheet_layout
 from dk_publishing.adapters.media.drive_catalog import DriveCatalog, sheet_modified_time
+from dk_publishing.adapters.media.drive_store import DriveMediaStore, GoogleDriveDownloader
 from dk_publishing.adapters.persistence.migrate import apply_migrations
 from dk_publishing.adapters.persistence.rehearsal import create_rehearsal_drafts
 from dk_publishing.adapters.persistence.sync import new_external_id
 from dk_publishing.adapters.persistence.unit_of_work import PostgresUnitOfWork
 from dk_publishing.adapters.platforms.dry_run import DryRunPublisher, PostgresLedger
+from dk_publishing.adapters.platforms.live import build_live_publisher
 from dk_publishing.adapters.platforms.registry import StaticPublisherRegistry
 from dk_publishing.adapters.sheets.gateway import GoogleSheetGateway
 from dk_publishing.adapters.sheets.google_access import (
@@ -36,6 +40,7 @@ from dk_publishing.domain.timezones import local_to_serial
 DEFAULT_MIGRATIONS_DIR = Path(__file__).resolve().parents[2] / "migrations"
 DEFAULT_PLATFORMS_CONFIG = Path(__file__).resolve().parents[2] / "config" / "platforms.yaml"
 DEFAULT_SHEET_CONFIG = Path(__file__).resolve().parents[2] / "config" / "sheet.yaml"
+DEFAULT_MEDIA_DIR = Path(__file__).resolve().parents[2] / ".media"
 
 
 def migrate_database(database_url: str, directory: Path = DEFAULT_MIGRATIONS_DIR) -> list[str]:
@@ -47,27 +52,48 @@ def unit_of_work(database_url: str) -> UnitOfWork:
 
 
 def build_services(
-    database_url: str, platforms_config: Path = DEFAULT_PLATFORMS_CONFIG
+    database_url: str,
+    platforms_config: Path = DEFAULT_PLATFORMS_CONFIG,
+    env: Mapping[str, str] | None = None,
+    transport: httpx.BaseTransport | None = None,
 ) -> Services:
-    """Wire the platforms named in config. Only `dry_run` has an adapter so far."""
+    """Wire the platforms named in config. `env` carries what live adapters need (Page id, token
+    file, Google key, media folder); without it only dry-run and off platforms can be built."""
+    env = env or {}
     ledger = PostgresLedger(database_url)
     publishers: dict[str, Publisher] = {}
+    live = False
     for name, settings in load_platforms(platforms_config).items():
         if settings.mode is Mode.OFF:
             continue
-        if settings.mode is not Mode.DRY_RUN:
+        if settings.mode is Mode.LIVE:
+            publishers[name] = build_live_publisher(name, settings, env, transport)
+            live = True
+        elif settings.mode is Mode.DRY_RUN:
+            # Native scheduling is not built, so a dry run uses the prepare-then-publish path.
+            caps = replace(settings.capabilities, native_window=None)
+            publishers[name] = DryRunPublisher(name, caps, ledger)
+        else:
             raise ConfigError(
                 f"platform {name!r} is {settings.mode.value!r} but no such adapter is built yet; "
-                "set it to dry_run or off"
+                "set it to dry_run, live or off"
             )
-        # Native scheduling is not built, so a dry run uses the prepare-then-publish path.
-        caps = replace(settings.capabilities, native_window=None)
-        publishers[name] = DryRunPublisher(name, caps, ledger)
     return Services(
         uow=lambda: PostgresUnitOfWork(database_url),
         publishers=StaticPublisherRegistry(publishers),
         clock=SystemClock(),
+        media_store=_media_store(env) if live else None,
     )
+
+
+def _media_store(env: Mapping[str, str]) -> DriveMediaStore:
+    """Where live platforms get their files: downloaded from Drive into MEDIA_DIR."""
+    key = env.get("GOOGLE_APPLICATION_CREDENTIALS", "").strip()
+    if not key:
+        raise ConfigError("a live platform needs GOOGLE_APPLICATION_CREDENTIALS to fetch media")
+    _, drive, _, _ = connect(Path(key).expanduser())
+    folder = Path(env.get("MEDIA_DIR", "").strip() or DEFAULT_MEDIA_DIR).expanduser()
+    return DriveMediaStore(GoogleDriveDownloader(drive), folder)
 
 
 def seed_rehearsal(
@@ -124,14 +150,19 @@ def init_sheet(credentials_path: Path, sheet_id: str, *, dry_run: bool) -> InitR
 
 
 def build_sync_services(
-    database_url: str, credentials_path: Path, sheet_id: str, folder_id: str, tenant_id: str = "dk"
+    database_url: str,
+    credentials_path: Path,
+    sheet_id: str,
+    folder_id: str,
+    tenant_id: str = "dk",
+    env: Mapping[str, str] | None = None,
 ) -> SyncServices:
     """Everything the Sheet sync needs: the publishing services plus Google Sheet and Drive."""
     platforms = load_platforms(DEFAULT_PLATFORMS_CONFIG)
     layout = load_sheet_layout(DEFAULT_SHEET_CONFIG, set(platforms))
     sheets, drive, _, _ = connect(credentials_path)
     return SyncServices(
-        core=build_services(database_url),
+        core=build_services(database_url, env=env),
         sheet=GoogleSheetGateway(sheets, sheet_id=sheet_id, layout=layout, platforms=platforms),
         media=DriveCatalog(drive, folder_id),
         platforms=list(platforms),
@@ -144,13 +175,21 @@ def sheet_modified_at(credentials_path: Path, sheet_id: str) -> str:
     return sheet_modified_time(drive, sheet_id)
 
 
-def add_account(database_url: str, platform: str, display_name: str, tenant_id: str = "dk") -> str:
-    """Register a (dry-run) account. Real accounts arrive with the connect flow."""
+def add_account(
+    database_url: str,
+    platform: str,
+    display_name: str,
+    tenant_id: str = "dk",
+    external_id: str | None = None,
+) -> str:
+    """Register an account. `external_id` is the platform's own account id (a Page id, a channel
+    id); without one it is a placeholder for a dry-run account. The connect flow will create
+    real ones."""
     if platform not in load_platforms(DEFAULT_PLATFORMS_CONFIG):
         raise ConfigError(f"unknown platform {platform!r}; see config/platforms.yaml")
     with PostgresUnitOfWork(database_url) as uow:
         account_id = uow.sync.add_account(
-            tenant_id, platform, display_name.strip(), new_external_id(platform)
+            tenant_id, platform, display_name.strip(), external_id or new_external_id(platform)
         )
         uow.commit()
     return account_id

@@ -53,6 +53,12 @@ class PublisherRegistry(Protocol):
     def for_platform(self, platform: str) -> Publisher: ...
 
 
+class MediaStore(Protocol):
+    def ensure_local(self, media: Sequence[Mapping[str, Any]]) -> list[Rendition]:
+        """Make each approved media file available on local disk, verified against the checksum
+        it had when approved. Safe to repeat; a file already downloaded is reused."""
+
+
 class DuplicateAccount(Exception):
     """An account with this display name (or external id) already exists on the platform."""
 

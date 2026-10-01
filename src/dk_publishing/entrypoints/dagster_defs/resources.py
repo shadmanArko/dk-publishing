@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from dagster import ConfigurableResource
@@ -15,7 +16,9 @@ class ServicesResource(ConfigurableResource):  # type: ignore[type-arg]
     platforms_config: str = str(composition.DEFAULT_PLATFORMS_CONFIG)
 
     def services(self) -> Services:
-        return composition.build_services(self.database_url, Path(self.platforms_config))
+        return composition.build_services(
+            self.database_url, Path(self.platforms_config), env=os.environ
+        )
 
 
 class SheetSyncResource(ConfigurableResource):  # type: ignore[type-arg]
@@ -32,6 +35,7 @@ class SheetSyncResource(ConfigurableResource):  # type: ignore[type-arg]
             Path(self.credentials_path).expanduser(),
             self.sheet_id,
             self.folder_id,
+            env=os.environ,
         )
 
     def modified_at(self) -> str:

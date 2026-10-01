@@ -3,9 +3,11 @@
 # `mode` is what this deployment does for the platform:
 #   off      not registered; approving a variant for it fails loudly
 #   dry_run  everything real except the final call, which goes to publishing.dry_run_posts
-#   assisted / live   need a real adapter. None is built yet, so the loader refuses them.
+#   live     the real adapter. Built so far: facebook (needs FACEBOOK_PAGE_ID and
+#            FACEBOOK_PAGE_TOKEN_FILE in .env; posts really go out).
+#   assisted not built yet; the loader refuses it.
 # The launch plan (ADR 0014) is facebook, instagram, threads, youtube live; tiktok and linkedin
-# assisted; x and reddit off. Until those adapters exist, everything runs dry_run.
+# assisted; x and reddit off. Platforms without a real adapter stay dry_run.
 #
 # `tab` is the Google Sheet tab for the platform (display name; defaults to the key).
 #
@@ -15,7 +17,7 @@ defaults:
   max_lateness: 2h
   prepare_lead: 30m
 platforms:
-  facebook:  {tab: Facebook, mode: dry_run, native_window: [10m, 30d], prepare_lead: 5m}
+  facebook:  {tab: Facebook, mode: dry_run, api_version: v25.0, native_window: [10m, 30d], prepare_lead: 5m}
   instagram: {tab: Instagram, mode: dry_run, prepare_lead: 30m, prepared_ttl: 24h, pulls_media_by_url: true}
   threads:   {tab: Threads, mode: dry_run, prepare_lead: 10m, pulls_media_by_url: true}
   youtube:   {tab: YouTube, mode: dry_run, native_window: [15m, 180d], prepare_lead: 5m}
