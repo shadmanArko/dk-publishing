@@ -3,7 +3,10 @@ from __future__ import annotations
 from dk_publishing.application.ports import DueAction
 from dk_publishing.application.services import Services
 from dk_publishing.application.use_cases._common import S, expire
-from dk_publishing.application.use_cases.housekeeping import flag_stale_publishing
+from dk_publishing.application.use_cases.housekeeping import (
+    flag_stale_publishing,
+    recover_stale_preparing,
+)
 from dk_publishing.application.use_cases.prepare import prepare_variant
 from dk_publishing.application.use_cases.publish import publish_variant
 from dk_publishing.application.use_cases.reconcile import reconcile_variant
@@ -40,6 +43,7 @@ def run_action(services: Services, due: DueAction) -> RunResult:
 def run_due(services: Services, limit: int = 50) -> list[tuple[DueAction, RunResult]]:
     """One tick of the scheduler: flag dead runs, then run everything that is due."""
     flag_stale_publishing(services)
+    recover_stale_preparing(services)
     with services.uow() as uow:
         due = uow.variants.due(services.clock.now(), limit)
     return [(item, run_action(services, item)) for item in due]

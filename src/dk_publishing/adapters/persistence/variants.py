@@ -187,14 +187,14 @@ class PostgresVariantRepository:
 
     def due(self, now: datetime, limit: int) -> list[DueAction]:
         rows = self._conn.execute(
-            """SELECT id::text, next_action, next_action_at, version
+            """SELECT id::text, next_action, next_action_at, version, platform, account_id::text
                FROM publishing.variants
                WHERE next_action_at <= %s
                ORDER BY next_action_at, id
                LIMIT %s""",
             (now, limit),
         ).fetchall()
-        return [DueAction(r[0], Action(r[1]), r[2], r[3]) for r in rows]
+        return [DueAction(r[0], Action(r[1]), r[2], r[3], r[4], r[5]) for r in rows]
 
 
 def _check_consistent(

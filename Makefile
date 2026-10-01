@@ -1,3 +1,5 @@
+DAGSTER_HOME := $(CURDIR)/.dagster_home
+
 .PHONY: help install lint format typecheck arch test check
 help:  ## list targets
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | sed 's/:.*##/\t/'
@@ -14,3 +16,16 @@ arch:  ## import-linter layer contract
 test:  ## pytest with coverage gate
 	uv run pytest --cov --cov-report=term-missing
 check: lint typecheck arch test  ## everything CI runs
+
+.PHONY: db-up db-down migrate dagster-dev seed-rehearsal
+db-up:  ## start the local dev Postgres (Docker) on :5433
+	docker compose -f compose.dev.yaml up -d --wait
+db-down:  ## stop it (data kept)
+	docker compose -f compose.dev.yaml down
+migrate:  ## apply migrations to $$DATABASE_URL
+	uv run dk migrate
+dagster-dev:  ## Dagster UI + daemon on :3000 (dry-run); needs DATABASE_URL
+	mkdir -p $(DAGSTER_HOME) && cp dagster/dagster.dev.yaml $(DAGSTER_HOME)/dagster.yaml
+	DAGSTER_HOME=$(DAGSTER_HOME) uv run dagster dev -w dagster/workspace.yaml
+seed-rehearsal:  ## create approved dry-run posts a few minutes out
+	uv run dk seed-rehearsal

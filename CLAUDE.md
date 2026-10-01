@@ -30,3 +30,12 @@
   variant on purpose: a duplicate must show up as two rows.
 - Use cases take `(services, variant_id, expected_version)`; a version mismatch returns `SKIPPED`, a lost
   compare-and-set returns `LOST_RACE`. Both are normal. Use-case tests run against real Postgres, not in-memory fakes.
+- **Dagster is a thin shell** (`entrypoints/dagster_defs/`): ops are build/call/log, the `due_actions` sensor turns
+  `variants.due()` into runs keyed `<action>:<variant_id>:<version>`. Do NOT add `from __future__ import annotations` to
+  `jobs.py`/`sensors.py`: Dagster resolves op/sensor parameter annotations at runtime and breaks on strings.
+  `DAGSTER_HOME` must be an absolute path (the Makefile sets it). Runs are tagged `dk/account`; `dagster/*.yaml` allows
+  one run per account at a time.
+- **platforms.yaml:** every non-`off` platform is `dry_run` until a real adapter exists (the loader refuses
+  `assisted`/`live`). YAML reads an unquoted `off` as `False`; the loader accepts it, don't "fix" that.
+- **Local loop:** `make db-up && make migrate && make dagster-dev`, then `make seed-rehearsal` and watch
+  localhost:3000. `.env` (git-ignored) holds identifiers only (Sheet/Drive/Meta IDs); keys go outside the repo.

@@ -1,0 +1,17 @@
+# Production: run storage in the separate `dagster` Postgres database (never the `app` one).
+telemetry:
+  enabled: false
+storage:
+  postgres:
+    postgres_url:
+      env: DAGSTER_DATABASE_URL
+run_coordinator:
+  module: dagster.core.run_coordinator
+  class: QueuedRunCoordinator
+  config:
+    max_concurrent_runs: 8
+    tag_concurrency_limits:
+      - key: dk/account
+        limit: 1
+        value:
+          applyLimitPerUniqueValue: true

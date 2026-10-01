@@ -1,0 +1,15 @@
+# Local development: run history in DAGSTER_HOME (SQLite). Same queue rules as production.
+telemetry:
+  enabled: false
+run_coordinator:
+  module: dagster.core.run_coordinator
+  class: QueuedRunCoordinator
+  config:
+    max_concurrent_runs: 8
+    tag_concurrency_limits:
+      # One run per social account at a time, so a slow upload never overlaps a publish on the
+      # same account, while different accounts run side by side.
+      - key: dk/account
+        limit: 1
+        value:
+          applyLimitPerUniqueValue: true

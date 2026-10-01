@@ -64,6 +64,8 @@ class DueAction:
     action: Action
     at: datetime
     version: int
+    platform: str
+    account_id: str  # runs are limited to one at a time per account
 
 
 class VariantRepository(Protocol):

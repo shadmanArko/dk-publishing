@@ -1,13 +1,23 @@
-# Per-platform lead times, lateness and limits. No secrets. Values from docs/architecture.md.
-# `mode` is the launch default; the runtime switch lives in channel_settings.
+# Per-platform lead times, lateness and limits. No secrets.
+#
+# `mode` is what this deployment does for the platform:
+#   off      not registered; approving a variant for it fails loudly
+#   dry_run  everything real except the final call, which goes to publishing.dry_run_posts
+#   assisted / live   need a real adapter. None is built yet, so the loader refuses them.
+# The launch plan (ADR 0014) is facebook, instagram, threads, youtube live; tiktok and linkedin
+# assisted; x and reddit off. Until those adapters exist, everything runs dry_run.
+#
+# `native_window` marks platforms that can hold a post until the slot [min lead, max lead].
+# Native scheduling is not built yet, so dry_run mode ignores it and uses prepare-then-publish.
 defaults:
   max_lateness: 2h
+  prepare_lead: 30m
 platforms:
-  facebook:  {mode: dry_run,  native_window: [10m, 30d]}
-  instagram: {mode: dry_run,  prepare_lead: 30m, prepared_ttl: 24h}
-  threads:   {mode: dry_run,  prepare_lead: 10m}
-  youtube:   {mode: dry_run,  native_window: [15m, 180d]}
-  tiktok:    {mode: assisted}
-  linkedin:  {mode: assisted}
+  facebook:  {mode: dry_run, native_window: [10m, 30d], prepare_lead: 5m}
+  instagram: {mode: dry_run, prepare_lead: 30m, prepared_ttl: 24h, pulls_media_by_url: true}
+  threads:   {mode: dry_run, prepare_lead: 10m, pulls_media_by_url: true}
+  youtube:   {mode: dry_run, native_window: [15m, 180d], prepare_lead: 5m}
+  tiktok:    {mode: dry_run}
+  linkedin:  {mode: dry_run}
   x:         {mode: off}
   reddit:    {mode: off}

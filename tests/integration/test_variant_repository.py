@@ -91,6 +91,7 @@ def test_apply_writes_state_event_and_next_action_together(conninfo: str, seed: 
         assert uow.variants.due(NOW, 10) == []
         [item] = uow.variants.due(NOW + timedelta(hours=3), 10)
         assert (item.variant_id, item.action, item.version) == (draft.id, Action.PREPARE, 1)
+        assert (item.platform, item.account_id) == (draft.platform, draft.account_id)
 
 
 def test_due_is_ordered_and_limited(conninfo: str, seed: Seed) -> None:

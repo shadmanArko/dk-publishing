@@ -12,3 +12,5 @@ secrets/*
 !secrets/*.enc.yaml
 .env
 *.key
+
+.dagster_home/

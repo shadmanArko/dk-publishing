@@ -4,7 +4,11 @@ version = "0.1.0"
 description = "Dhaka Kacchi social publishing pipeline: schedule approved posts to eight platforms."
 requires-python = ">=3.12,<3.13"
 dependencies = [
+    "dagster>=1.13.24",
+    "dagster-postgres>=0.29.24",
+    "dagster-webserver>=1.13.24",
     "psycopg[binary]>=3.2",
+    "pyyaml>=6.0.3",
     "tzdata>=2026.4",
 ]
 
@@ -19,6 +23,7 @@ dev = [
     "pytest>=8.0",
     "pytest-cov>=5.0",
     "ruff>=0.5",
+    "types-pyyaml>=6.0.12.20260906",
 ]
 
 [build-system]
@@ -31,6 +36,10 @@ packages = ["src/dk_publishing"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra --strict-markers"
+filterwarnings = [
+    "ignore:.*is currently in beta.*",
+    "ignore:Starting in dagster 1.11",
+]
 
 [tool.coverage.run]
 source = ["src/dk_publishing/domain", "src/dk_publishing/application"]
