@@ -19,7 +19,14 @@ from dk_publishing.adapters.platforms.meta import GraphClient
 from dk_publishing.adapters.platforms.meta_check import check_instagram, check_meta
 from dk_publishing.adapters.platforms.meta_credentials import MetaCredentials, SectionTokenProvider
 from dk_publishing.composition import DEFAULT_PLATFORMS_CONFIG
-from dk_publishing.domain.errors import AuthFailed, RateLimited, Rejected, Retryable, UnknownOutcome
+from dk_publishing.domain.errors import (
+    AuthFailed,
+    PublishingError,
+    RateLimited,
+    Rejected,
+    Retryable,
+    UnknownOutcome,
+)
 from dk_publishing.domain.publishing import Rendition, VariantSnapshot
 
 BASE = "https://media.example.test/m"
@@ -468,3 +475,43 @@ def test_the_whole_check_reports_instagram_even_without_a_threads_section(tmp_pa
         MetaCredentials(path), load_platforms(DEFAULT_PLATFORMS_CONFIG), FakeGraph().transport()
     )
     assert any("Instagram" in problem for problem in report.problems)
+
+
+# --- a reel by public link: Instagram fetches it, nothing is uploaded ----------------------------
+
+
+def test_with_a_public_address_a_reel_is_fetched_by_link_and_nothing_is_uploaded(
+    tmp_path: Path,
+) -> None:
+    publisher, fake = build(tmp_path=tmp_path, public=True)
+    handle = publisher.prepare(snap(share_to_feed=True), files(tmp_path))
+
+    create = fake.forms[0]
+    assert create["media_type"] == "REELS" and "upload_type" not in create
+    assert create["video_url"].startswith(f"{BASE}/") and create["video_url"].endswith("/clip.mp4")
+    assert fake.uploads == [] and not any(
+        r.url.host == "rupload.facebook.com" for r in fake.requests
+    )
+    assert handle["public_urls"] == [create["video_url"]]
+
+
+def test_the_link_is_removed_once_the_reel_is_live(tmp_path: Path) -> None:
+    publisher, _ = build(tmp_path=tmp_path, public=True)
+    handle = publisher.prepare(snap(), files(tmp_path))
+    folders = list((tmp_path / "public").iterdir())
+    assert len(folders) == 1
+    publisher.publish(handle)
+    assert list((tmp_path / "public").iterdir()) == []  # nobody can fetch the file any more
+
+
+def test_a_reel_whose_link_instagram_cannot_fetch_leaves_no_public_link_behind(
+    tmp_path: Path,
+) -> None:
+    fake = FakeInstagram()
+    fake.fail_next(
+        httpx.Response(400, json={"error": {"message": "cannot fetch", "code": 9004}}), only="POST"
+    )
+    publisher, _ = build(fake, tmp_path=tmp_path, public=True)
+    with pytest.raises(PublishingError):
+        publisher.prepare(snap(), files(tmp_path))
+    assert list((tmp_path / "public").iterdir()) == []

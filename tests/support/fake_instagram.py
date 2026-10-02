@@ -82,6 +82,8 @@ class FakeInstagram:
                 return graph_error(400, 100, "Invalid media_type")
             cid = f"C{self._n}"
             resumable = form.get("upload_type") == "resumable"
+            if form.get("video_url") and not form["video_url"].startswith("https://"):
+                return graph_error(400, 9004, "The media could not be fetched from that URL")
             self.containers[cid] = {
                 "form": form,
                 "polls": 0,

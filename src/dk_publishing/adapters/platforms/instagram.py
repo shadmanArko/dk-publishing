@@ -3,10 +3,12 @@
 Two steps, as Instagram defines them: create a media container (`prepare`, ahead of the slot so
 Instagram can process it), then publish the container (`publish`).
 
-- A reel is uploaded straight from the local file with Instagram's resumable upload, so it needs no
-  public web address.
 - A photo is fetched by Instagram from a public URL, so it needs the public-media link store (the
   server provides one; a laptop does not).
+- A reel is fetched the same way when a public-media store is configured (`video_url`). Without
+  one it is uploaded straight from the local file with Instagram's resumable upload. The link is
+  preferred because the resumable endpoint answered HTTP 500 "unknown error" for every file when
+  tested against a real app (2026-10-02), while a link needs nothing from that endpoint.
 """
 
 from __future__ import annotations
@@ -115,23 +117,26 @@ class InstagramPublisher:
         data: dict[str, Any] = {"caption": str(snapshot.content.get("caption") or "")}
         urls: list[str] = []
 
+        by_link = self._public is not None
         if fmt == "reel":
-            data.update({"media_type": "REELS", "upload_type": "resumable"})
+            data["media_type"] = "REELS"
+            if not by_link:
+                data["upload_type"] = "resumable"
             data["share_to_feed"] = "true" if snapshot.content.get("share_to_feed") else "false"
             cover = snapshot.content.get("cover_at_s")
             if cover is not None:
                 data["thumb_offset"] = str(int(float(cover) * 1000))
-        else:
-            if self._public is None:
-                raise Rejected("this photo has no public address to be fetched from")
+        elif self._public is None:
+            raise Rejected("this photo has no public address to be fetched from")
+        if self._public is not None:
             url = self._public.expose(media[0])
             urls.append(url)
-            data["image_url"] = url
+            data["video_url" if fmt == "reel" else "image_url"] = url
 
         try:
             created = self._graph.post(f"{self._account}/media", data)
             container = str(created["id"])
-            if fmt == "reel":
+            if fmt == "reel" and not by_link:
                 self._upload(created, container, media[0])
             self._wait_until_ready(container)
         except PublishingError:
