@@ -413,7 +413,7 @@ def _init() -> int:
         print(f"{path} already exists; left it alone")
         return 0
     print(f"[did] created {path} (owner-only, outside the repo)")
-    print("Fill it in with docs/setup/README.md, then run: make check-setup")
+    print("Fill it in following README.md, then run: make check-setup")
     if not _env().get("DK_CONFIG_FILE", "").strip():
         print(f"Also add this line to .env:  DK_CONFIG_FILE={path}")
     return 0
