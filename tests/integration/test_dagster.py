@@ -14,9 +14,13 @@ from dagster import (
     Definitions,
     EnvVar,
     ExecuteInProcessResult,
+    Failure,
     RunRequest,
     SkipReason,
+    build_run_status_sensor_context,
     build_sensor_context,
+    job,
+    op,
 )
 
 from dk_publishing import composition
@@ -25,11 +29,13 @@ from dk_publishing.application.services import Services
 from dk_publishing.application.use_cases.approve import approve
 from dk_publishing.application.use_cases.prepare import prepare_variant
 from dk_publishing.application.use_cases.publish import publish_variant
+from dk_publishing.domain import errors
 from dk_publishing.entrypoints.dagster_defs import build_definitions, defs
-from dk_publishing.entrypoints.dagster_defs.resources import ServicesResource
+from dk_publishing.entrypoints.dagster_defs.resources import NotifyResource, ServicesResource
 from tests.integration.conftest import Seed
 from tests.integration.rig import CONTENT, ME, SLOT, R, Rig, S
 from tests.support import MIN, SimulatedCrash
+from tests.support.fake_telegram import FakeNotifier
 
 REPO = Path(__file__).resolve().parents[2]
 _SERVICES: dict[str, Services] = {}
@@ -75,9 +81,14 @@ def test_every_expected_definition_is_present() -> None:
         "expire_variant",
         "housekeeping",
         "sync_sheet",
+        "daily_digest",
     }
     assert defs.get_sensor_def("due_actions").minimum_interval_seconds == 30
     assert defs.get_sensor_def("sheet_changed").minimum_interval_seconds == 120
+    assert defs.get_sensor_def("notifications").minimum_interval_seconds == 60
+    assert defs.get_sensor_def("failed_run_alert") is not None
+    digest = defs.get_schedule_def("daily_digest")
+    assert (digest.cron_schedule, digest.execution_timezone) == ("0 8 * * *", "Europe/Berlin")
     schedule = defs.get_schedule_def("housekeeping")
     assert (schedule.cron_schedule, schedule.execution_timezone) == ("*/5 * * * *", "Europe/Berlin")
 
@@ -281,3 +292,108 @@ def test_a_native_post_is_handed_over_by_its_own_job_and_published_by_the_platfo
     [verify] = requests(definitions, resource)
     assert verify.job_name == "reconcile_variant" and run(definitions, verify).success
     assert rig.get(variant.id).status is S.PUBLISHED and rig.publisher.calls["publish"] == 0
+
+
+# --- alerts -------------------------------------------------------------------------------------
+
+
+class FakeNotify(NotifyResource):
+    """Same resource, but Telegram is a recorder, the clock is the rig's and the heartbeat counts."""
+
+    def services(self) -> Services:
+        return _SERVICES[self.database_url]
+
+    def notifier(self) -> FakeNotifier | None:
+        return _TELEGRAM.get(self.database_url)
+
+    def warnings(self) -> list[str]:
+        return ["a token is running out"]
+
+    def heartbeat(self) -> bool | None:
+        _BEATS.append(self.database_url)
+        return True
+
+
+_TELEGRAM: dict[str, FakeNotifier] = {}
+_BEATS: list[str] = []
+
+
+def alert_wiring(
+    rig: Rig, *, telegram: bool = True
+) -> tuple[Definitions, FakeNotify, FakeNotifier]:
+    definitions, _ = wire(rig)
+    notify = FakeNotify(database_url=rig.conninfo)
+    recorder = FakeNotifier()
+    if telegram:
+        _TELEGRAM[rig.conninfo] = recorder
+    return definitions, notify, recorder
+
+
+def test_the_notification_sensor_sends_failures_and_pings_the_heartbeat(
+    conninfo: str, seed: Seed
+) -> None:
+    rig = Rig(conninfo, seed, publish=[errors.Rejected("no good")])
+    variant = rig.prepared()
+    rig.clock.set(SLOT)
+    assert publish_variant(rig.services, variant.id, variant.version) is R.FAILED
+    definitions, notify, telegram = alert_wiring(rig)
+
+    sensor = definitions.get_sensor_def("notifications")
+    result = list(sensor(build_sensor_context(resources={"notify": notify})))  # type: ignore[arg-type]
+    assert isinstance(result[0], SkipReason) and "sent 1 alert" in str(result[0].skip_message)
+    assert "no good" in telegram.sent[0] and _BEATS[-1] == conninfo
+
+
+def test_without_telegram_the_sensor_skips_quietly_but_still_pings(
+    conninfo: str, seed: Seed
+) -> None:
+    rig = Rig(conninfo, seed)
+    definitions, notify, _ = alert_wiring(rig, telegram=False)
+    before = len(_BEATS)
+    result = list(
+        definitions.get_sensor_def("notifications")(
+            build_sensor_context(resources={"notify": notify})  # type: ignore[arg-type]
+        )
+    )
+    assert "not configured" in str(result[0].skip_message) and len(_BEATS) == before + 1
+
+
+def test_the_digest_job_sends_the_morning_message_once(conninfo: str, seed: Seed) -> None:
+    rig = Rig(conninfo, seed)
+    definitions, notify, telegram = alert_wiring(rig)
+    job = definitions.get_job_def("daily_digest")
+    resources = {"notify": notify}
+    for _ in range(2):
+        assert job.execute_in_process(
+            instance=DagsterInstance.ephemeral(), resources=resources
+        ).success
+    assert len(telegram.sent) == 1 and "a token is running out" in telegram.sent[0]
+
+
+def test_a_failed_run_alerts_once_and_never_crashes_the_sensor(conninfo: str, seed: Seed) -> None:
+    rig = Rig(conninfo, seed)
+    definitions, notify, telegram = alert_wiring(rig)
+
+    @op
+    def boom() -> None:
+        raise Failure("the sync was halted: 9 cancellations")
+
+    @job
+    def exploding() -> None:
+        boom()
+
+    instance = DagsterInstance.ephemeral()
+    failed = exploding.execute_in_process(instance=instance, raise_on_error=False)
+    assert not failed.success
+    sensor = definitions.get_sensor_def("failed_run_alert")
+    context = build_run_status_sensor_context(
+        sensor_name="failed_run_alert",
+        dagster_instance=instance,
+        dagster_run=failed.dagster_run,
+        dagster_event=failed.get_run_failure_event(),
+        resources={"notify": notify},
+    ).for_run_failure()
+    sensor(context)
+    sensor(context)
+    assert len(telegram.sent) == 1 and "9 cancellations" in telegram.sent[0]
+    assert "exploding" in telegram.sent[0]

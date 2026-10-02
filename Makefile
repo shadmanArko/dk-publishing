@@ -17,7 +17,7 @@ test:  ## pytest with coverage gate
 	uv run pytest --cov --cov-report=term-missing
 check: lint typecheck arch test  ## everything CI runs
 
-.PHONY: db-up db-down migrate dagster-dev seed-rehearsal check-google sheet-init sheet-init-dry meta-init meta-check meta-page-token meta-refresh connect-youtube check-youtube
+.PHONY: db-up db-down migrate dagster-dev seed-rehearsal check-google sheet-init sheet-init-dry meta-init meta-check meta-page-token meta-refresh connect-youtube check-youtube telegram-init telegram-chat telegram-check telegram-test alerts-digest
 db-up:  ## start the local dev Postgres (Docker) on :5433
 	docker compose -f compose.dev.yaml up -d --wait
 db-down:  ## stop it (data kept)
@@ -47,3 +47,13 @@ connect-youtube:  ## one-time YouTube login (opens your browser)
 	uv run --env-file .env dk connect youtube
 check-youtube:  ## test the saved YouTube login
 	uv run --env-file .env dk connect youtube --check
+telegram-init:  ## create the Telegram credentials file and show the steps
+	uv run --env-file .env dk telegram init
+telegram-chat:  ## find your chat id after messaging the bot
+	uv run --env-file .env dk telegram chat
+telegram-check:  ## test the bot token
+	uv run --env-file .env dk telegram check
+telegram-test:  ## send yourself a test message
+	uv run --env-file .env dk telegram test
+alerts-digest:  ## send today's digest now
+	uv run --env-file .env dk alerts digest

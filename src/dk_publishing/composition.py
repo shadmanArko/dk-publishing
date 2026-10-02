@@ -14,6 +14,15 @@ from dk_publishing.adapters.config.platforms import ConfigError, Mode, load_plat
 from dk_publishing.adapters.config.sheet_layout import load_sheet_layout
 from dk_publishing.adapters.media.drive_catalog import DriveCatalog, sheet_modified_time
 from dk_publishing.adapters.media.drive_store import DriveMediaStore, GoogleDriveDownloader
+from dk_publishing.adapters.notify.telegram import (
+    DEFAULT_PATH as DEFAULT_TELEGRAM_PATH,
+)
+from dk_publishing.adapters.notify.telegram import (
+    SetupResult,
+    TelegramCredentials,
+    ping_heartbeat,
+    run_setup,
+)
 from dk_publishing.adapters.persistence.migrate import apply_migrations
 from dk_publishing.adapters.persistence.rehearsal import create_rehearsal_drafts
 from dk_publishing.adapters.persistence.sync import new_external_id
@@ -32,7 +41,11 @@ from dk_publishing.adapters.platforms.meta_credentials import (
     write_template_from_env,
 )
 from dk_publishing.adapters.platforms.registry import StaticPublisherRegistry
-from dk_publishing.adapters.platforms.threads_token import RefreshResult, refresh_expiring_tokens
+from dk_publishing.adapters.platforms.threads_token import (
+    RefreshResult,
+    expiry_warnings,
+    refresh_expiring_tokens,
+)
 from dk_publishing.adapters.sheets.gateway import GoogleSheetGateway
 from dk_publishing.adapters.sheets.google_access import (
     AccessReport,
@@ -41,7 +54,13 @@ from dk_publishing.adapters.sheets.google_access import (
     expected_missing_tabs,
 )
 from dk_publishing.adapters.sheets.sheet_init import POSTS, InitReport, initialise
-from dk_publishing.application.ports import AccountInfo, DuplicateAccount, Publisher, UnitOfWork
+from dk_publishing.application.ports import (
+    AccountInfo,
+    DuplicateAccount,
+    Notifier,
+    Publisher,
+    UnitOfWork,
+)
 from dk_publishing.application.services import Services, SyncServices
 from dk_publishing.application.use_cases.approve import approve
 from dk_publishing.application.use_cases.results import RunResult
@@ -313,3 +332,47 @@ def connect_login(
 ) -> ConnectResult:
     """One-time login setup for a platform that needs it."""
     return connect_from_env(platform, env, check_only=check_only)
+
+
+def telegram_path(env: Mapping[str, str]) -> Path:
+    return Path(
+        env.get("TELEGRAM_CREDENTIALS_FILE", "").strip() or DEFAULT_TELEGRAM_PATH
+    ).expanduser()
+
+
+def telegram_setup(command: str, env: Mapping[str, str]) -> SetupResult:
+    """`init`, `chat`, `check` or `test` for the Telegram bot."""
+    return run_setup(command, telegram_path(env))
+
+
+def build_notifier(
+    env: Mapping[str, str], transport: httpx.BaseTransport | None = None
+) -> Notifier | None:
+    """The Telegram notifier, or None when no credentials file is configured (alerts are then
+    skipped, never fatal). A configured but incomplete file is an error worth stopping for."""
+    if not env.get("TELEGRAM_CREDENTIALS_FILE", "").strip():
+        return None
+    return TelegramCredentials(telegram_path(env)).notifier(transport)
+
+
+def build_alert_services(database_url: str) -> Services:
+    """Alerts only read Postgres and the clock; no platform is touched."""
+    return Services(
+        uow=lambda: PostgresUnitOfWork(database_url),
+        publishers=StaticPublisherRegistry({}),
+        clock=SystemClock(),
+    )
+
+
+def credential_warnings(env: Mapping[str, str]) -> list[str]:
+    """Tokens that need attention soon, in words, for the daily digest."""
+    path = env.get("META_CREDENTIALS_FILE", "").strip()
+    if not path or not Path(path).expanduser().exists():
+        return []
+    return expiry_warnings(MetaCredentials(Path(path)))
+
+
+def ping_alive(env: Mapping[str, str]) -> bool | None:
+    """Ping the external dead-man's switch. None when none is configured."""
+    url = env.get("HEARTBEAT_URL", "").strip()
+    return ping_heartbeat(url) if url else None

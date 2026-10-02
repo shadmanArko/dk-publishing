@@ -5,6 +5,7 @@ from collections.abc import Callable
 from dagster import Config, Failure, JobDefinition, OpExecutionContext, job, op
 
 from dk_publishing.application.services import Services
+from dk_publishing.application.use_cases.alerts import send_digest
 from dk_publishing.application.use_cases.dispatch import expire_variant
 from dk_publishing.application.use_cases.housekeeping import (
     fail_stale_scheduling,
@@ -17,7 +18,11 @@ from dk_publishing.application.use_cases.reconcile import reconcile_variant
 from dk_publishing.application.use_cases.results import RunResult
 from dk_publishing.application.use_cases.schedule_native import schedule_native_variant
 from dk_publishing.application.use_cases.sync_sheet import sync_sheet
-from dk_publishing.entrypoints.dagster_defs.resources import ServicesResource, SheetSyncResource
+from dk_publishing.entrypoints.dagster_defs.resources import (
+    NotifyResource,
+    ServicesResource,
+    SheetSyncResource,
+)
 
 
 class ActionConfig(Config):
@@ -81,3 +86,18 @@ def sync_sheet_op(context: OpExecutionContext, sheet_sync: SheetSyncResource) ->
 @job(name="sync_sheet")
 def sync_sheet_job() -> None:
     sync_sheet_op()
+
+
+@op
+def daily_digest_op(context: OpExecutionContext, notify: NotifyResource) -> None:
+    notifier = notify.notifier()
+    if notifier is None:
+        context.log.info("Telegram is not configured; no digest sent")
+        return
+    sent = send_digest(notify.services(), notifier, notify.warnings())
+    context.log.info("digest sent" if sent else "today's digest was already sent")
+
+
+@job
+def daily_digest() -> None:
+    daily_digest_op()

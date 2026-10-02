@@ -24,6 +24,7 @@ EXPECTED_TABLES = {
     "renditions",
     "channel_settings",
     "dry_run_posts",  # the rehearsal ledger; not one of the plan's eleven
+    "alerts_sent",  # which Telegram alerts were delivered
 }
 
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 from dagster import Definitions, EnvVar
 
 from dk_publishing.entrypoints.dagster_defs.jobs import (
+    daily_digest,
     expire_variant_job,
     housekeeping,
     prepare_variant_job,
@@ -11,12 +12,22 @@ from dk_publishing.entrypoints.dagster_defs.jobs import (
     schedule_native_job,
     sync_sheet_job,
 )
-from dk_publishing.entrypoints.dagster_defs.resources import ServicesResource, SheetSyncResource
+from dk_publishing.entrypoints.dagster_defs.resources import (
+    NotifyResource,
+    ServicesResource,
+    SheetSyncResource,
+)
 from dk_publishing.entrypoints.dagster_defs.schedules import (
+    daily_digest_schedule,
     housekeeping_schedule,
     sheet_sync_fallback,
 )
-from dk_publishing.entrypoints.dagster_defs.sensors import due_actions, sheet_changed
+from dk_publishing.entrypoints.dagster_defs.sensors import (
+    due_actions,
+    failed_run_alert,
+    notifications,
+    sheet_changed,
+)
 
 
 def default_sheet_sync() -> SheetSyncResource:
@@ -40,10 +51,15 @@ def build_definitions(
             expire_variant_job,
             housekeeping,
             sync_sheet_job,
+            daily_digest,
         ],
-        sensors=[due_actions, sheet_changed],
-        schedules=[housekeeping_schedule, sheet_sync_fallback],
-        resources={"services": services, "sheet_sync": sheet_sync or default_sheet_sync()},
+        sensors=[due_actions, sheet_changed, notifications, failed_run_alert],
+        schedules=[housekeeping_schedule, sheet_sync_fallback, daily_digest_schedule],
+        resources={
+            "services": services,
+            "sheet_sync": sheet_sync or default_sheet_sync(),
+            "notify": NotifyResource(database_url=EnvVar("DATABASE_URL")),
+        },
     )
 
 

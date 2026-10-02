@@ -47,6 +47,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     refresh = meta_commands.add_parser("refresh", help="renew the tokens that expire")
     refresh.add_argument("--force", action="store_true", help="renew even if refreshed recently")
+    telegram = commands.add_parser("telegram", help="Telegram alerts: setup and tests")
+    telegram.add_argument(
+        "telegram_command",
+        choices=["init", "chat", "check", "test"],
+        help="init: create file; chat: find chat id; check: test bot; test: message you",
+    )
+    alerts = commands.add_parser("alerts", help="send pending alerts or the digest now")
+    alerts.add_argument("what", choices=["pending", "digest"])
     connect = commands.add_parser("connect", help="one-time login setup for a platform")
     connect.add_argument("platform")
     connect.add_argument("--check", action="store_true", help="only test the saved login")
@@ -79,6 +87,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _account(args)
     if args.command == "connect":
         return _connect(args.platform, check_only=args.check)
+    if args.command == "telegram":
+        return _telegram(args.telegram_command)
     if args.command == "meta":
         return _meta(args.meta_command, force=getattr(args, "force", False))
 
@@ -87,6 +97,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         print("DATABASE_URL is required and has no default.", file=sys.stderr)
         return 2
 
+    if args.command == "alerts":
+        return _alerts(database_url, args.what)
     if args.command == "migrate":
         applied = composition.migrate_database(database_url)
         print("\n".join(f"applied {name}" for name in applied) or "already up to date")
@@ -327,3 +339,42 @@ def _connect(platform: str, *, check_only: bool) -> int:
         return 1
     print("\n".join(result.lines))
     return 0 if result.ok else 1
+
+
+def _telegram(command: str) -> int:
+    try:
+        result = composition.telegram_setup(command, os.environ)
+    except ConfigError as exc:
+        print(f"[FAIL] {exc}", file=sys.stderr)
+        return 1
+    print("\n".join(result.lines))
+    return 0 if result.ok else 1
+
+
+def _alerts(database_url: str, what: str) -> int:
+    from dk_publishing.application.ports import NotifyError
+    from dk_publishing.application.use_cases.alerts import send_alerts, send_digest
+
+    try:
+        notifier = composition.build_notifier(os.environ)
+    except ConfigError as exc:
+        print(f"[FAIL] {exc}", file=sys.stderr)
+        return 1
+    if notifier is None:
+        print("TELEGRAM_CREDENTIALS_FILE is not set; run `make telegram-init`", file=sys.stderr)
+        return 1
+    services = composition.build_alert_services(database_url)
+    try:
+        if what == "digest":
+            sent = send_digest(services, notifier, composition.credential_warnings(os.environ))
+            print("sent the digest" if sent else "today's digest was already sent")
+        else:
+            report = send_alerts(services, notifier)
+            print(f"sent {report.sent} alert(s)")
+            for problem in report.failed:
+                print(f"[FAIL] {problem}", file=sys.stderr)
+            return 1 if report.failed else 0
+    except NotifyError as exc:
+        print(f"[FAIL] {exc}", file=sys.stderr)
+        return 1
+    return 0

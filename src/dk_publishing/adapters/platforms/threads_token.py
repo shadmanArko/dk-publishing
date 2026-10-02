@@ -84,6 +84,15 @@ def days_left(credentials: MetaCredentials, now: datetime | None = None) -> int 
     return None if expires is None else (expires - (now or datetime.now(UTC))).days
 
 
+def expiry_warnings(credentials: MetaCredentials, now: datetime | None = None) -> list[str]:
+    """Plain-language warnings for tokens close to expiring, for the daily digest."""
+    left = days_left(credentials, now)
+    if left is None or left > WARN_WITHIN.days:
+        return []
+    when = "has expired" if left < 0 else f"expires in {left} days"
+    return [f"The Threads token {when}; run `make meta-refresh` (or paste a new token)"]
+
+
 def _when(value: object) -> datetime | None:
     try:
         moment = datetime.fromisoformat(str(value))

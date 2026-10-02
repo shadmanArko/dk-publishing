@@ -1,6 +1,6 @@
 from dagster import DefaultScheduleStatus, ScheduleDefinition
 
-from dk_publishing.entrypoints.dagster_defs.jobs import housekeeping, sync_sheet_job
+from dk_publishing.entrypoints.dagster_defs.jobs import daily_digest, housekeeping, sync_sheet_job
 
 # Berlin time, so daylight saving never shifts a schedule.
 housekeeping_schedule = ScheduleDefinition(
@@ -20,4 +20,12 @@ sheet_sync_fallback = ScheduleDefinition(
     execution_timezone="Europe/Berlin",
     default_status=DefaultScheduleStatus.RUNNING,
     tags={"dk/sync": "sheet"},
+)
+
+daily_digest_schedule = ScheduleDefinition(
+    name="daily_digest",
+    job=daily_digest,
+    cron_schedule="0 8 * * *",
+    execution_timezone="Europe/Berlin",
+    default_status=DefaultScheduleStatus.RUNNING,
 )

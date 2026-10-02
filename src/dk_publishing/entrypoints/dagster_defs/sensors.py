@@ -4,13 +4,16 @@ from dagster import (
     DefaultSensorStatus,
     JobDefinition,
     RunConfig,
+    RunFailureSensorContext,
     RunRequest,
     SensorEvaluationContext,
     SkipReason,
+    run_failure_sensor,
     sensor,
 )
 
-from dk_publishing.application.ports import DueAction
+from dk_publishing.application.ports import DueAction, NotifyError
+from dk_publishing.application.use_cases.alerts import send_alerts, send_run_failure
 from dk_publishing.domain.planning import Action
 from dk_publishing.entrypoints.dagster_defs.jobs import (
     ActionConfig,
@@ -21,7 +24,11 @@ from dk_publishing.entrypoints.dagster_defs.jobs import (
     schedule_native_job,
     sync_sheet_job,
 )
-from dk_publishing.entrypoints.dagster_defs.resources import ServicesResource, SheetSyncResource
+from dk_publishing.entrypoints.dagster_defs.resources import (
+    NotifyResource,
+    ServicesResource,
+    SheetSyncResource,
+)
 
 BATCH = 50
 
@@ -88,3 +95,49 @@ def sheet_changed(
         return
     context.update_cursor(modified)
     yield RunRequest(run_key=f"sync:{modified}", tags={"dk/sync": "sheet"})
+
+
+@sensor(minimum_interval_seconds=60, default_status=DefaultSensorStatus.RUNNING)
+def notifications(context: SensorEvaluationContext, notify: NotifyResource) -> Iterator[SkipReason]:
+    """Send pending failure alerts and ping the dead-man's switch. Runs inside the sensor tick
+    (no job per minute); a Telegram outage only delays alerts, they are sent once it is back."""
+    alive = notify.heartbeat()
+    if alive is False:
+        context.log.warning("the heartbeat URL did not answer")
+    notifier = notify.notifier()
+    if notifier is None:
+        yield SkipReason("Telegram is not configured")
+        return
+    report = send_alerts(notify.services(), notifier)
+    for problem in report.failed:
+        context.log.warning(f"alert not delivered, will retry: {problem}")
+    yield SkipReason(f"sent {report.sent} alert(s)")
+
+
+@run_failure_sensor(default_status=DefaultSensorStatus.RUNNING, minimum_interval_seconds=60)
+def failed_run_alert(context: RunFailureSensorContext, notify: NotifyResource) -> None:
+    """A halted sync or a crashed job tells a person; the next failure of the same job within the
+    hour is not repeated."""
+    notifier = notify.notifier()
+    if notifier is None:
+        return
+    run = context.dagster_run
+    try:
+        send_run_failure(
+            notify.services(),
+            notifier,
+            run_id=run.run_id,
+            job=run.job_name,
+            error=_why(context),
+        )
+    except NotifyError as exc:
+        context.log.warning(f"could not send the failure alert: {exc}")
+
+
+def _why(context: RunFailureSensorContext) -> str:
+    """The step's own error ("the sync was halted: ..."), not Dagster's generic run message."""
+    for event in context.get_step_failure_events():
+        failure = event.step_failure_data
+        if failure.error is not None:
+            return failure.error.message.strip()
+    return context.failure_event.message or "failed"

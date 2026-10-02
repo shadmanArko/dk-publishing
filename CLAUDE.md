@@ -51,7 +51,7 @@
 - The `sheet_changed` sensor costs one extra no-op sync after our own write-back (Drive's modifiedTime moves).
   `sheet_sync_fallback` (15 min) exists because a failed sync would not otherwise retry until the Sheet changes.
 - More than 5 scheduled cancellations in one sync halts it (nothing applied, the Dagster run fails). Override with
-  `dk sync --allow-cancellations`. Telegram will replace the failed-run signal later.
+  `dk sync --allow-cancellations`. The `failed_run_alert` sensor now sends that failure to Telegram.
 - `dk sheet sample` / `dk account add` create dry-run accounts; real ones come from the (unbuilt) connect flow.
 - **Real platform adapters** (`adapters/platforms/meta.py`, `facebook.py`): `GraphClient` maps every Meta answer to the
   five domain errors. A write whose answer is lost, or a 5xx on a write, is `UnknownOutcome` (never `Retryable`);
@@ -61,8 +61,14 @@
   config is dry_run everywhere, and a test asserts it, so nothing posts by accident.
 - Media for live platforms is downloaded from Drive during `prepare` (`DriveMediaStore`, named by checksum, verified
   against the approved md5). No transcoding yet. A checksum mismatch is `Retryable`: the next sync will notice the edit.
-- Not built: Instagram/Threads/YouTube adapters, the token vault, Reels.
+- Not built: the token vault, TikTok/LinkedIn/X/Reddit adapters.
 - **Delivery** (ADR 0017): a row's `delivery` is `direct` (we publish at the slot) or `native` (the platform holds the
   post). `planning_caps()` hides a platform's native window unless the row says `native`; every `plan_next(APPROVED)` must
   use it. Rules that must not regress: withdraw at the platform BEFORE changing a natively scheduled variant, never cancel
   at or after the slot, and never retry an uncertain schedule (it FAILS for a person: a hidden copy may exist).
+- **Telegram alerts** (ADR 0018): `application/use_cases/alerts.py`. A message is recorded in `publishing.alerts_sent`
+  only AFTER Telegram accepted it, so an outage delays alerts and never loses or repeats them. Alerts come from
+  `variant_events` (failed/expired/unknown), looking back 24h only. The `notifications` sensor sends them and pings
+  `HEARTBEAT_URL` inside its tick (no job per minute); `failed_run_alert` is deduped per job per hour; `daily_digest`
+  runs 08:00 Berlin, once per day. No `TELEGRAM_CREDENTIALS_FILE` = alerts silently off. The bot token is part of every
+  request URL: never let an httpx exception message out (`telegram._call` swallows it on purpose).

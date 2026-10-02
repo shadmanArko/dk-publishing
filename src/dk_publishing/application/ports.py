@@ -224,7 +224,60 @@ class AttemptRepository(Protocol):
         """Finished attempts in `phase` that retryable, rate-limited or uncertain outcomes ended."""
 
 
+@dataclass(frozen=True, slots=True)
+class AlertEvent:
+    """A variant moving into a state a person must hear about (failed, expired, uncertain)."""
+
+    key: str
+    variant_id: str
+    title: str
+    platform: str
+    account: str
+    status: str
+    reason: str
+    at: datetime
+    publish_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class DigestItem:
+    title: str
+    platform: str
+    account: str
+    status: str
+    publish_at: datetime
+    published_at: datetime | None
+    reason: str | None
+
+
+class NotifyError(Exception):
+    """The message could not be delivered. Nothing is marked as sent, so it is tried again."""
+
+
+class Notifier(Protocol):
+    def send(self, text: str) -> None:
+        """Deliver `text` (Telegram HTML) to the owner, or raise NotifyError."""
+
+
+class AlertRepository(Protocol):
+    def unsent_events(self, tenant_id: str, since: datetime, limit: int) -> list[AlertEvent]: ...
+
+    def mark_sent(self, tenant_id: str, key: str, now: datetime) -> bool:
+        """Record a delivery. False if it was already recorded."""
+
+    def was_sent(self, tenant_id: str, key: str) -> bool: ...
+
+    def results(self, tenant_id: str, start: datetime, end: datetime) -> list[DigestItem]:
+        """Variants that reached published, failed or expired with a slot in [start, end)."""
+
+    def upcoming(self, tenant_id: str, start: datetime, end: datetime) -> list[DigestItem]:
+        """Approved or held variants with a slot in [start, end), earliest first."""
+
+
 class UnitOfWork(Protocol):
+    @property
+    def alerts(self) -> AlertRepository: ...
+
     @property
     def variants(self) -> VariantRepository: ...
 

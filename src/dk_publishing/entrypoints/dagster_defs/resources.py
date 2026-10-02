@@ -6,6 +6,7 @@ from pathlib import Path
 from dagster import ConfigurableResource
 
 from dk_publishing import composition
+from dk_publishing.application.ports import Notifier
 from dk_publishing.application.services import Services, SyncServices
 
 
@@ -42,3 +43,22 @@ class SheetSyncResource(ConfigurableResource):  # type: ignore[type-arg]
         return composition.sheet_modified_at(
             Path(self.credentials_path).expanduser(), self.sheet_id
         )
+
+
+class NotifyResource(ConfigurableResource):  # type: ignore[type-arg]
+    """Telegram and the heartbeat, from the environment. Everything here is optional: with no
+    Telegram file configured the alerts are skipped, never fatal."""
+
+    database_url: str
+
+    def services(self) -> Services:
+        return composition.build_alert_services(self.database_url)
+
+    def notifier(self) -> Notifier | None:
+        return composition.build_notifier(os.environ)
+
+    def warnings(self) -> list[str]:
+        return composition.credential_warnings(os.environ)
+
+    def heartbeat(self) -> bool | None:
+        return composition.ping_alive(os.environ)
