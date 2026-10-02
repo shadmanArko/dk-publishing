@@ -3,9 +3,9 @@
 # `mode` is what this deployment does for the platform:
 #   off      not registered; approving a variant for it fails loudly
 #   dry_run  everything real except the final call, which goes to publishing.dry_run_posts
-#   live     the real adapter. Built so far: facebook (needs FACEBOOK_PAGE_ID and
-#            FACEBOOK_PAGE_TOKEN_FILE in .env; posts really go out).
-#   assisted not built yet; the loader refuses it.
+#   live     the real adapter (facebook, instagram, threads, youtube). Posts really go out.
+#   assisted the post is handed to you on Telegram (caption + video) at the slot and you post it
+#            yourself. Built for tiktok. Needs Telegram set up (docs/setup/telegram.md).
 # The launch plan (ADR 0014) is facebook, instagram, threads, youtube live; tiktok and linkedin
 # assisted; x and reddit off. Platforms without a real adapter stay dry_run.
 #

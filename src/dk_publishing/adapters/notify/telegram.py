@@ -95,6 +95,32 @@ def _call(
     raise NotifyError(f"Telegram said {response.status_code}: {description}")
 
 
+MAX_VIDEO_BYTES = 49 * 1024 * 1024  # Telegram bots may send files up to 50 MB
+MAX_CAPTION = 1024
+UPLOAD_TIMEOUT = httpx.Timeout(120.0, connect=10.0)
+
+
+def _upload(
+    token: str,
+    method: str,
+    data: Mapping[str, Any],
+    files: Mapping[str, Any],
+    transport: httpx.BaseTransport | None,
+) -> None:
+    try:
+        with httpx.Client(timeout=UPLOAD_TIMEOUT, transport=transport) as client:
+            response = client.post(f"{API}/bot{token}/{method}", data=dict(data), files=dict(files))
+    except httpx.HTTPError as exc:
+        raise NotifyError(f"could not send the file to Telegram ({type(exc).__name__})") from None
+    if response.status_code == 200:
+        return
+    try:
+        description = str(response.json().get("description") or response.reason_phrase)[:200]
+    except ValueError:
+        description = response.reason_phrase
+    raise NotifyError(f"Telegram said {response.status_code}: {description}")
+
+
 class TelegramNotifier:
     def __init__(
         self, token: str, chat_id: str, *, transport: httpx.BaseTransport | None = None
@@ -115,6 +141,26 @@ class TelegramNotifier:
             },
             self._transport,
         )
+
+    def send_video(self, path: str, caption: str) -> None:
+        file = Path(path)
+        if not file.is_file():
+            raise NotifyError(f"the video {file.name} is missing")
+        if file.stat().st_size > MAX_VIDEO_BYTES:
+            raise NotifyError(f"{file.name} is over Telegram's 50 MB limit")
+        with file.open("rb") as handle:
+            _upload(
+                self._token,
+                "sendVideo",
+                {
+                    "chat_id": self._chat,
+                    "caption": caption[:MAX_CAPTION],
+                    "parse_mode": "HTML",
+                    "supports_streaming": "true",
+                },
+                {"video": (file.name, handle, "video/mp4")},
+                self._transport,
+            )
 
     def identity(self) -> str:
         return str(_call(self._token, "getMe", {}, self._transport).get("username") or "?")

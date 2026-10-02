@@ -28,8 +28,10 @@ from dk_publishing.adapters.notify.telegram import (
 )
 from dk_publishing.adapters.persistence.migrate import apply_migrations
 from dk_publishing.adapters.persistence.rehearsal import create_rehearsal_drafts
+from dk_publishing.adapters.persistence.sent_log import PostgresSentLog
 from dk_publishing.adapters.persistence.sync import new_external_id
 from dk_publishing.adapters.persistence.unit_of_work import PostgresUnitOfWork
+from dk_publishing.adapters.platforms.assisted_build import build_assisted_publisher
 from dk_publishing.adapters.platforms.connect import ConnectResult, connect_from_env
 from dk_publishing.adapters.platforms.dk_file import (
     DEFAULT_PATH as DEFAULT_CONFIG_PATH,
@@ -114,6 +116,17 @@ def build_services(
         if settings.mode is Mode.LIVE:
             publishers[name] = build_live_publisher(name, settings, env, transport)
             live = True
+        elif settings.mode is Mode.ASSISTED:
+            notifier = build_notifier(env, transport)
+            if notifier is None:
+                raise ConfigError(
+                    f"{name} is assisted: it hands posts to you on Telegram, but Telegram is "
+                    "not set up (docs/setup/telegram.md)"
+                )
+            publishers[name] = build_assisted_publisher(
+                name, settings, notifier, PostgresSentLog(database_url)
+            )
+            live = True  # the video is downloaded from Drive before it is handed over
         elif settings.mode is Mode.DRY_RUN:
             publishers[name] = DryRunPublisher(
                 name, settings.capabilities, ledger, clock=SystemClock()
@@ -121,7 +134,7 @@ def build_services(
         else:
             raise ConfigError(
                 f"platform {name!r} is {settings.mode.value!r} but no such adapter is built yet; "
-                "set it to dry_run, live or off"
+                "set it to dry_run, assisted, live or off"
             )
     return Services(
         uow=lambda: PostgresUnitOfWork(database_url),

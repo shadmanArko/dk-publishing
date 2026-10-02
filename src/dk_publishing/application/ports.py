@@ -97,6 +97,7 @@ class SyncVariant:
     account_name: str | None
     source_hash: str | None
     external_url: str | None
+    external_id: str | None
     last_reason: str | None  # the reason on the variant's latest event
 
 
@@ -260,6 +261,9 @@ class NotifyError(Exception):
 class Notifier(Protocol):
     def send(self, text: str) -> None:
         """Deliver `text` (Telegram HTML) to the owner, or raise NotifyError."""
+
+    def send_video(self, path: str, caption: str) -> None:
+        """Deliver a video file with a short caption, or raise NotifyError."""
 
 
 class AlertRepository(Protocol):

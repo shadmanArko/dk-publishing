@@ -9,6 +9,10 @@ from typing import Any
 
 from dk_publishing.domain.model import Variant
 
+# An "assisted" platform has no API we may post with: the system hands the post to a person, and its
+# external id starts with this so the Sheet can say "sent to you" instead of claiming it is live.
+ASSISTED_PREFIX = "assisted:"
+
 
 @dataclass(frozen=True, slots=True)
 class Violation:

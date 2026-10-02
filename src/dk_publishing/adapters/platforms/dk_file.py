@@ -54,6 +54,15 @@ TEMPLATE: dict[str, Any] = {
         "bot_token": "",
         "chat_id": "",
     },
+    "tiktok": {
+        "_help": (
+            "docs/setup/tiktok.md. `handle` is your @name (a label only: posts are handed to you "
+            "on Telegram). client_key and client_secret are for direct posting, once approved"
+        ),
+        "handle": "",
+        "client_key": "",
+        "client_secret": "",
+    },
     "alerts": {
         "_help": "Optional dead-man's switch: a Healthchecks.io-style ping URL",
         "heartbeat_url": "",
@@ -102,6 +111,7 @@ def configured_accounts(env: Mapping[str, str]) -> list[tuple[str, str]]:
         ("instagram", (meta.get("instagram") or {}).get("account_id")),
         ("threads", (meta.get("threads") or {}).get("user_id")),
         ("youtube", youtube.get("channel_id")),
+        ("tiktok", (data.get("tiktok") or {}).get("handle")),
     ]
     return [(platform, str(ident).strip()) for platform, ident in found if str(ident or "").strip()]
 

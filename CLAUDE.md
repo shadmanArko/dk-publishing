@@ -98,3 +98,8 @@
 - **When the user reports an expired/broken token or login:** the fix is documented in `docs/setup/update-secrets.md`
   (edit local `dk.json`, `make check-setup`, `make deploy-secrets`). Server details are in the git-ignored
   `deploy/server.conf` (copy of `deploy/server.conf.example`). Walk them through that page; never ask for token values in chat.
+- **Assisted mode** (ADR 0019, `adapters/platforms/assisted.py`, `tiktok.py`): `mode: assisted` hands the post to the owner
+  on Telegram (card + video) at the slot. The variant becomes `published` with external id `assisted:<variant>`; the Sheet
+  shows "sent to you" (`domain/sync.row_status`). `Notifier` has `send_video`; `SentLog` (alerts_sent) makes the card
+  once-only and answers `find_live`. Assisted needs Telegram: build_services and check-setup refuse it without. TikTok
+  direct posting is NOT built: TikTok bans "private or personal use" apps, so expect no approval.

@@ -1,7 +1,7 @@
 # dk-publishing
 
-Publishes your approved posts from one Google Sheet to Facebook, Instagram, Threads and YouTube
-(more later), on time and never twice. Tick **ready** in the Sheet; the system does the rest and
+Publishes your approved posts from one Google Sheet to Facebook, Instagram, Threads and YouTube,
+and hands TikTok posts to you on Telegram (more later), on time and never twice. Tick **ready** in the Sheet; the system does the rest and
 tells you on Telegram if anything needs you. It is business-agnostic: your brand lives only in the
 Sheet and in `dk.json`.
 
@@ -14,7 +14,8 @@ Sheet and in `dk.json`.
 | Facebook Page, Instagram professional account, Threads account | where posts go | [Meta](docs/setup/meta.md) |
 | A YouTube channel | video posts | [YouTube](docs/setup/youtube.md) |
 | A Telegram account | alerts and the 08:00 digest (optional) | [Telegram](docs/setup/telegram.md) |
-| TikTok, LinkedIn, X, Reddit | not supported yet | [Status](docs/setup/other-platforms.md) |
+| TikTok | posts are handed to you on Telegram | [TikTok](docs/setup/tiktok.md) |
+| LinkedIn, X, Reddit | not supported yet | [Status](docs/setup/other-platforms.md) |
 | A server (for production) | runs it all day, serves media links | [Deploy](docs/setup/deploy.md) |
 | A token or key stopped working | change it and send it to the server | [Update a token or key](docs/setup/update-secrets.md) |
 

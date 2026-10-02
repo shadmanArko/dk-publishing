@@ -65,6 +65,7 @@ class PostgresSyncRepository:
             """SELECT v.id::text, v.tenant_id, v.post_id::text, v.platform, v.account_id::text,
                       v.publish_at, v.status, v.version, v.snapshot_hash,
                       p.post_key, p.title, a.display_name, v.source_hash, v.external_url,
+                      v.external_id,
                       (SELECT e.reason FROM publishing.variant_events e
                         WHERE e.variant_id = v.id ORDER BY e.seq DESC LIMIT 1)
                FROM publishing.variants v
@@ -93,7 +94,8 @@ class PostgresSyncRepository:
                 account_name=r[11],
                 source_hash=r[12],
                 external_url=r[13],
-                last_reason=r[14],
+                external_id=r[14],
+                last_reason=r[15],
             )
             for r in rows
         ]

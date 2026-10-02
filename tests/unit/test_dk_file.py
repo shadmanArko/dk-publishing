@@ -36,7 +36,7 @@ def fill(path: Path, **sections: dict[str, object]) -> None:
 
 def test_the_template_is_private_complete_and_never_overwritten(dk: Path) -> None:
     assert stat.S_IMODE(dk.stat().st_mode) == 0o600
-    assert {"google", "meta", "youtube", "telegram", "alerts", "media"} <= set(
+    assert {"google", "meta", "youtube", "telegram", "tiktok", "alerts", "media"} <= set(
         json.loads(dk.read_text())
     )
     dk.write_text('{"mine": 1}')
@@ -199,10 +199,26 @@ def test_accounts_are_derived_from_the_ids_in_dk_json(dk: Path) -> None:
             "threads": {"user_id": ""},
         },
         youtube={"channel_id": "UC1"},
+        tiktok={"handle": "@dhakakacchi"},
     )
     assert configured_accounts(env) == [
         ("facebook", "PAGE"),
         ("instagram", "IG"),
         ("youtube", "UC1"),
+        ("tiktok", "@dhakakacchi"),
     ]
     assert configured_accounts({}) == []
+
+
+def test_check_setup_requires_telegram_when_a_platform_is_handed_to_you(
+    dk: Path, tmp_path: Path
+) -> None:
+    config = tmp_path / "platforms.yaml"
+    config.write_text("platforms:\n  tiktok: {mode: assisted, tab: TikTok}\n")
+    env = resolve_env({"DK_CONFIG_FILE": str(dk)})
+    report = check_setup(env, load_platforms(config))
+    assert any("hands posts to you on Telegram" in line for line in report.lines)
+    fill(dk, telegram={"bot_token": "1:x", "chat_id": "2"}, tiktok={"handle": "@dk"})
+    ok = check_setup(resolve_env({"DK_CONFIG_FILE": str(dk)}), load_platforms(config))
+    assert not any("hands posts to you" in line for line in ok.lines)
+    assert any("[ok]   tiktok: filled in" in line for line in ok.lines)

@@ -425,6 +425,7 @@ def _status_plan(
             variant_status=sv.variant.status if sv else None,
             problems=d.problems,
             external_url=sv.external_url if sv else None,
+            external_id=sv.external_id if sv else None,
             last_reason=sv.last_reason if sv else None,
             edited_while_live=bool(
                 sv and sv.variant.status is S.PUBLISHED and sv.source_hash != d.source_hash

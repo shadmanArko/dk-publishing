@@ -11,7 +11,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Any
 
-from dk_publishing.domain.publishing import Violation
+from dk_publishing.domain.publishing import ASSISTED_PREFIX, Violation
 from dk_publishing.domain.sheet import MediaFile, PlatformRow, PostRow
 from dk_publishing.domain.snapshot import snapshot_hash
 from dk_publishing.domain.status import IN_FLIGHT, VariantStatus
@@ -190,6 +190,9 @@ def join_problems(problems: Sequence[Violation]) -> str:
     return " ".join(p.message for p in problems)
 
 
+SENT_TO_YOU = "sent to you"
+
+
 def row_status(
     *,
     enabled: bool,
@@ -198,12 +201,19 @@ def row_status(
     external_url: str | None,
     last_reason: str | None,
     edited_while_live: bool,
+    external_id: str | None = None,
 ) -> tuple[str, str, str]:
     """(status, live_url, last_error) in plain words for one platform row."""
     if variant_status is None:
         return ("invalid", "", join_problems(problems)) if enabled and problems else ("", "", "")
     status = variant_status.value
     if variant_status is S.PUBLISHED:
+        if (external_id or "").startswith(ASSISTED_PREFIX):
+            return (
+                SENT_TO_YOU,
+                "",
+                "Post it yourself in the app. The details were sent on Telegram.",
+            )
         return status, external_url or "", LIVE_EDIT_NOTE if edited_while_live else ""
     if variant_status in (S.DRAFT, S.INVALID):
         return status, "", join_problems(problems)
@@ -220,6 +230,7 @@ def post_summary(statuses: Sequence[str]) -> str:
     live = counted.count("published")
     parts = [f"{live} of {len(counted)} live"]
     for label, matching in (
+        ("sent to you", (SENT_TO_YOU,)),
         ("failed", ("failed", "expired")),
         ("invalid", ("invalid",)),
         ("waiting", ("draft",)),
