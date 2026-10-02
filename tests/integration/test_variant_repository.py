@@ -290,3 +290,18 @@ def test_a_variant_cannot_point_at_another_tenants_post(conninfo: str, seed: See
             variant.post_id,
             variant.account_id,
         )
+
+
+def test_last_change_is_empty_with_no_posts_and_moves_when_a_post_changes(
+    conninfo: str, seed: Seed
+) -> None:
+    from dk_publishing import composition
+    from tests.integration.rig import Rig
+
+    assert composition.last_variant_change(conninfo) == ""
+    rig = Rig(conninfo, seed)
+    rig.draft()
+    first = composition.last_variant_change(conninfo)
+    assert first != ""
+    rig.approved()
+    assert composition.last_variant_change(conninfo) > first

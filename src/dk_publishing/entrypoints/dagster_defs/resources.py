@@ -53,7 +53,12 @@ class SheetSyncResource(ConfigurableResource):  # type: ignore[type-arg]
 
     def modified_at(self) -> str:
         _, key, sheet_id, _ = self._settings()
-        return composition.sheet_modified_at(key, sheet_id)
+        # The Sheet's own edit time, plus the last state change of any post, so a publish or a
+        # failure reaches the Sheet within a couple of minutes rather than at the next fallback.
+        return (
+            f"{composition.sheet_modified_at(key, sheet_id)}"
+            f"|{composition.last_variant_change(self.database_url)}"
+        )
 
 
 class NotifyResource(ConfigurableResource):  # type: ignore[type-arg]

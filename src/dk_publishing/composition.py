@@ -241,6 +241,13 @@ def build_sync_services(
     )
 
 
+def last_variant_change(database_url: str) -> str:
+    """When any post last changed state ("" if none yet). A change here means the Sheet's status
+    columns are out of date and a sync should run."""
+    with PostgresUnitOfWork(database_url) as uow:
+        return uow.variants.last_change()
+
+
 def sheet_modified_at(credentials_path: Path, sheet_id: str) -> str:
     _, drive, _, _ = connect(credentials_path)
     return sheet_modified_time(drive, sheet_id)

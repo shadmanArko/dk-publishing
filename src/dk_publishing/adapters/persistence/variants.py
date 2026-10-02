@@ -191,6 +191,10 @@ class PostgresVariantRepository:
         )
         return True
 
+    def last_change(self) -> str:
+        row = self._conn.execute("SELECT max(updated_at) FROM publishing.variants").fetchone()
+        return "" if row is None or row[0] is None else row[0].isoformat()
+
     def due(self, now: datetime, limit: int) -> list[DueAction]:
         rows = self._conn.execute(
             """SELECT id::text, next_action, next_action_at, version, platform, account_id::text

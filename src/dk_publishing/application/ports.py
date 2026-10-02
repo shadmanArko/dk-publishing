@@ -188,6 +188,9 @@ class VariantRepository(Protocol):
 
     def due(self, now: datetime, limit: int) -> list[DueAction]: ...
 
+    def last_change(self) -> str:
+        """The latest time any variant changed state, as text ("" if there are none)."""
+
 
 class AttemptRepository(Protocol):
     def begin(
