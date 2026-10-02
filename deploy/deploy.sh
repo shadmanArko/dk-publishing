@@ -1,18 +1,20 @@
 #!/usr/bin/env bash
 # Ship the code (and, with --secrets, your dk.json + Google key) to the server and (re)start it.
-#   deploy/deploy.sh root@SERVER media.example.com [--secrets] [--shared NETWORK]
+#   deploy/deploy.sh root@SERVER media.example.com [--secrets] [--shared NETWORK] [--account-name NAME]
+# --account-name NAME: create an account called NAME for every platform dk.json has an id for.
 # --shared NETWORK: the server already has a web server on 80/443 in that Docker network. This stack
 # then publishes no ports; see docs/setup/deploy.md for the one block that web server needs.
 # Needs: ssh access to the server, rsync, python3 and docker on the server (bootstrap.sh).
 set -euo pipefail
 HOST="${1:?usage: deploy.sh user@server media-domain [--secrets]}"
 DOMAIN="${2:?usage: deploy.sh user@server media-domain [--secrets]}"
-SECRETS=""; SHARED=""
+SECRETS=""; SHARED=""; ACCOUNT_NAME=""
 shift 2
 while [ $# -gt 0 ]; do
   case "$1" in
     --secrets) SECRETS="--secrets" ;;
     --shared) SHARED="${2:?--shared needs the Docker network name of the existing web server}"; shift ;;
+    --account-name) ACCOUNT_NAME="${2:?--account-name needs a name}"; shift ;;
     *) echo "unknown option $1"; exit 1 ;;
   esac
   shift
@@ -45,7 +47,7 @@ PY
 fi
 
 echo "==> start"
-ssh "$HOST" bash -s "$DOMAIN" "$SHARED" <<'REMOTE_SCRIPT'
+ssh "$HOST" bash -s "$DOMAIN" "$SHARED" "$ACCOUNT_NAME" <<'REMOTE_SCRIPT'
 set -euo pipefail
 cd /srv/dk/app/deploy
 [ -s /srv/dk/secrets/dk.json ] || { echo "no /srv/dk/secrets/dk.json yet: re-run with --secrets"; exit 1; }
@@ -58,6 +60,9 @@ printf 'MEDIA_SITE=%s\n' "$1" >> .env
 if [ -n "$2" ]; then printf 'COMPOSE_PROFILES=shared\nDK_PROXY_NETWORK=%s\n' "$2" >> .env
 else printf 'COMPOSE_PROFILES=standalone\n' >> .env; fi
 docker compose -f compose.prod.yaml --env-file .env up -d --build
+if [ -n "$3" ]; then
+  docker compose -f compose.prod.yaml --env-file .env exec -T webserver dk account sync --name "$3"
+fi
 docker compose -f compose.prod.yaml --env-file .env ps
 echo "==> checking the configuration inside the container (posts nothing)"
 docker compose -f compose.prod.yaml --env-file .env run --rm --no-deps -T webserver dk check-setup || true

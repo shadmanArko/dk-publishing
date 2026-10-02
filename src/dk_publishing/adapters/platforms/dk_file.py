@@ -90,6 +90,22 @@ def config_path(env: Mapping[str, str]) -> Path | None:
     return Path(value).expanduser() if value else None
 
 
+def configured_accounts(env: Mapping[str, str]) -> list[tuple[str, str]]:
+    """(platform, the platform's own account id) for each account dk.json has an id for."""
+    path = config_path(env)
+    if path is None:
+        return []
+    data = load(path)
+    meta, youtube = data.get("meta") or {}, data.get("youtube") or {}
+    found = [
+        ("facebook", (meta.get("facebook") or {}).get("page_id")),
+        ("instagram", (meta.get("instagram") or {}).get("account_id")),
+        ("threads", (meta.get("threads") or {}).get("user_id")),
+        ("youtube", youtube.get("channel_id")),
+    ]
+    return [(platform, str(ident).strip()) for platform, ident in found if str(ident or "").strip()]
+
+
 def create_template(path: Path) -> bool:
     """Write the empty template, owner-only. False (and nothing written) if the file exists."""
     path = path.expanduser()

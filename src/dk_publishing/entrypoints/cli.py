@@ -83,6 +83,10 @@ def _run(argv: Sequence[str] | None = None) -> int:
     account = commands.add_parser("account", help="dry-run accounts")
     account_commands = account.add_subparsers(dest="account_command", required=True)
     account_commands.add_parser("list", help="list accounts")
+    sync_accounts = account_commands.add_parser(
+        "sync", help="create an account for every platform dk.json has an id for"
+    )
+    sync_accounts.add_argument("--name", required=True, help="display name for the accounts")
     add = account_commands.add_parser("add", help="add a dry-run account")
     add.add_argument("platform")
     add.add_argument("name", help="display name, as it appears in the Sheet dropdown")
@@ -284,6 +288,10 @@ def _account(args: argparse.Namespace) -> int:
     if args.account_command == "list":
         for a in composition.list_accounts(database_url):
             print(f"{a.platform:<10} {a.display_name or '(no name)':<30} {a.status}")
+        return 0
+    if args.account_command == "sync":
+        lines = composition.sync_accounts(database_url, _env(), args.name)
+        print("\n".join(lines) or "dk.json holds no account ids yet")
         return 0
     try:
         composition.add_account(

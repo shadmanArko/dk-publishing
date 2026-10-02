@@ -36,6 +36,7 @@ make init               # creates dk.json, the ONE file for every id, key and to
 
 ```bash
 make db-up && make migrate
+uv run --env-file .env dk account sync --name "Your Business"   # accounts from the ids in dk.json
 make sheet-init          # builds the Sheet's tabs, dropdowns and instructions
 make dagster-dev         # open http://localhost:3000
 ```
@@ -54,7 +55,7 @@ uv run --env-file .env dk live-test youtube --video clip.mp4 --yes
 
 ## Run it on a server
 
-`deploy/deploy.sh root@SERVER media.yourbusiness.com --secrets` after a one-time `deploy/bootstrap.sh`.
+`deploy/deploy.sh root@SERVER media.yourbusiness.com --secrets --account-name "Your Business"` after a one-time `deploy/bootstrap.sh`.
 Steps and what runs by itself: [docs/setup/deploy.md](docs/setup/deploy.md).
 
 ## Everyday use

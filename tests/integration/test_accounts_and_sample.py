@@ -83,3 +83,27 @@ def test_the_sample_dates_parse_the_way_the_readme_promises() -> None:
     from dk_publishing.domain.timezones import serial_to_local
 
     assert serial_to_local(46340.75) == datetime(2026, 11, 14, 18, 0)
+
+
+def test_account_sync_creates_one_account_per_id_in_dk_json_and_is_repeatable(
+    conninfo: str, tmp_path: Path
+) -> None:
+    import json
+
+    path = tmp_path / "dk.json"
+    path.write_text(
+        json.dumps(
+            {
+                "meta": {"facebook": {"page_id": "PAGE"}, "instagram": {"account_id": "IG"}},
+                "youtube": {"channel_id": "UC1"},
+            }
+        )
+    )
+    env = {"DK_CONFIG_FILE": str(path)}
+    first = composition.sync_accounts(conninfo, env, "Dhaka Kacchi")
+    assert [line.split(":")[0] for line in first] == ["facebook", "instagram", "youtube"]
+    assert all("added" in line for line in first)
+    second = composition.sync_accounts(conninfo, env, "Dhaka Kacchi")
+    assert all("already exists" in line for line in second)
+    names = {(a.platform, a.display_name) for a in composition.list_accounts(conninfo)}
+    assert {("facebook", "Dhaka Kacchi"), ("youtube", "Dhaka Kacchi")} <= names

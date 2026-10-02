@@ -34,7 +34,12 @@ from dk_publishing.adapters.platforms.connect import ConnectResult, connect_from
 from dk_publishing.adapters.platforms.dk_file import (
     DEFAULT_PATH as DEFAULT_CONFIG_PATH,
 )
-from dk_publishing.adapters.platforms.dk_file import config_path, create_template, resolve_env
+from dk_publishing.adapters.platforms.dk_file import (
+    config_path,
+    configured_accounts,
+    create_template,
+    resolve_env,
+)
 from dk_publishing.adapters.platforms.dry_run import DryRunPublisher, PostgresLedger
 from dk_publishing.adapters.platforms.live import build_live_publisher
 from dk_publishing.adapters.platforms.live_test import LiveTestResult, run_live_test
@@ -438,3 +443,21 @@ def purge_public_media(env: Mapping[str, str], older_than: timedelta = timedelta
     if not directory or not base.strip():
         return 0
     return PublicMediaStore(Path(directory).expanduser(), base).purge_older_than(older_than)
+
+
+def sync_accounts(
+    database_url: str, env: Mapping[str, str], name: str, tenant_id: str = "dk"
+) -> list[str]:
+    """Create an account named `name` for every platform dk.json holds an id for. Accounts that
+    already exist are left alone. Returns a line per platform saying what happened."""
+    lines: list[str] = []
+    known = {a.platform for a in list_accounts(database_url, tenant_id) if a.display_name == name}
+    for platform, external_id in configured_accounts(env):
+        if platform not in load_platforms(DEFAULT_PLATFORMS_CONFIG):
+            continue
+        if platform in known:
+            lines.append(f"{platform}: {name!r} already exists")
+            continue
+        add_account(database_url, platform, name, tenant_id, external_id=external_id)
+        lines.append(f"{platform}: added {name!r} (id {external_id})")
+    return lines

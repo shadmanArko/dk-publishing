@@ -184,3 +184,25 @@ def test_init_works_when_dk_config_file_already_names_the_missing_file(
     assert main(["init"]) == 0 and target.exists()
     assert "created" in capsys.readouterr().out
     assert main(["init"]) == 0 and "already exists" in capsys.readouterr().out
+
+
+def test_accounts_are_derived_from_the_ids_in_dk_json(dk: Path) -> None:
+    from dk_publishing.adapters.platforms.dk_file import configured_accounts
+
+    env = {"DK_CONFIG_FILE": str(dk)}
+    assert configured_accounts(env) == []  # the empty template has no ids
+    fill(
+        dk,
+        meta={
+            "facebook": {"page_id": "PAGE"},
+            "instagram": {"account_id": " IG "},
+            "threads": {"user_id": ""},
+        },
+        youtube={"channel_id": "UC1"},
+    )
+    assert configured_accounts(env) == [
+        ("facebook", "PAGE"),
+        ("instagram", "IG"),
+        ("youtube", "UC1"),
+    ]
+    assert configured_accounts({}) == []

@@ -39,12 +39,12 @@ Threads and YouTube are `live` as shipped. Set the ones you are not ready for to
 
 ## 3. Deploy
 ```bash
-deploy/deploy.sh root@SERVER media.yourbusiness.com --secrets
+deploy/deploy.sh root@SERVER media.yourbusiness.com --secrets --account-name "Your Business"
 ```
 It copies the code, writes the server's own `dk.json` (your local one with the media settings filled
 in for you), copies the Google key, builds the image and starts everything. At the end it runs the
-configuration check inside the server and prints the result. Later deploys: leave off `--secrets`
-unless a key or token changed.
+configuration check inside the server and prints the result. `--account-name` creates one account per platform from the ids in `dk.json`; the name is what you pick in the
+Sheet's `account` column. Later deploys: leave off `--secrets` and `--account-name` unless something changed.
 
 ## 4. Look at it
 ```bash
