@@ -16,6 +16,7 @@ Sheet and in `dk.json`.
 | A Telegram account | alerts and the 08:00 digest (optional) | [Telegram](docs/setup/telegram.md) |
 | TikTok, LinkedIn, X, Reddit | not supported yet | [Status](docs/setup/other-platforms.md) |
 | A server (for production) | runs it all day, serves media links | [Deploy](docs/setup/deploy.md) |
+| A token or key stopped working | change it and send it to the server | [Update a token or key](docs/setup/update-secrets.md) |
 
 Use only the platforms you want. Anything left empty is skipped.
 
@@ -57,6 +58,11 @@ uv run --env-file .env dk live-test youtube --video clip.mp4 --yes
 
 `deploy/deploy.sh root@SERVER media.yourbusiness.com --secrets --account-name "Your Business"` after a one-time `deploy/bootstrap.sh`.
 Steps and what runs by itself: [docs/setup/deploy.md](docs/setup/deploy.md).
+
+## When a token or login stops working
+
+Edit `dk.json` on your computer, run `make check-setup`, then `make deploy-secrets`.
+Short steps and a problem-to-fix table: [docs/setup/update-secrets.md](docs/setup/update-secrets.md).
 
 ## Everyday use
 

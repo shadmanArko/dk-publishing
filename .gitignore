@@ -16,3 +16,4 @@ secrets/*
 .dagster_home/
 .media/
 deploy/.env
+deploy/server.conf

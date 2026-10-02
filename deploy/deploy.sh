@@ -1,15 +1,22 @@
 #!/usr/bin/env bash
 # Ship the code (and, with --secrets, your dk.json + Google key) to the server and (re)start it.
+#   deploy/deploy.sh [--secrets]                      (server details from deploy/server.conf)
 #   deploy/deploy.sh root@SERVER media.example.com [--secrets] [--shared NETWORK] [--account-name NAME]
 # --account-name NAME: create an account called NAME for every platform dk.json has an id for.
 # --shared NETWORK: the server already has a web server on 80/443 in that Docker network. This stack
 # then publishes no ports; see docs/setup/deploy.md for the one block that web server needs.
 # Needs: ssh access to the server, rsync, python3 and docker on the server (bootstrap.sh).
 set -euo pipefail
-HOST="${1:?usage: deploy.sh user@server media-domain [--secrets]}"
-DOMAIN="${2:?usage: deploy.sh user@server media-domain [--secrets]}"
-SECRETS=""; SHARED=""; ACCOUNT_NAME=""
-shift 2
+# Your server details live in deploy/server.conf (git-ignored; copy deploy/server.conf.example), so
+# the usual command is just `deploy/deploy.sh` or `deploy/deploy.sh --secrets`. Values given on the
+# command line (host and domain first, then options) win over the file.
+CONF="$(cd "$(dirname "$0")" && pwd)/server.conf"
+SERVER=""; DOMAIN=""; SHARED_NETWORK=""; ACCOUNT_NAME=""
+[ -f "$CONF" ] && . "$CONF"
+if [ $# -ge 2 ] && [[ "$1" != --* ]]; then SERVER="$1"; DOMAIN="$2"; shift 2; fi
+HOST="${SERVER:?no server: fill in deploy/server.conf or run deploy.sh user@server media-domain}"
+DOMAIN="${DOMAIN:?no media domain: fill in deploy/server.conf}"
+SECRETS=""; SHARED="$SHARED_NETWORK"
 while [ $# -gt 0 ]; do
   case "$1" in
     --secrets) SECRETS="--secrets" ;;
@@ -62,10 +69,10 @@ if [ -n "$2" ]; then printf 'COMPOSE_PROFILES=shared\nDK_PROXY_NETWORK=%s\n' "$2
 else printf 'COMPOSE_PROFILES=standalone\n' >> .env; fi
 docker compose -f compose.prod.yaml --env-file .env up -d --build
 if [ -n "$3" ]; then
-  docker compose -f compose.prod.yaml --env-file .env exec -T webserver dk account sync --name "$3"
+  docker compose -f compose.prod.yaml --env-file .env exec -T webserver dk account sync --name "$3" </dev/null   # </dev/null: docker would otherwise eat the rest of this script
 fi
 docker compose -f compose.prod.yaml --env-file .env ps
 echo "==> checking the configuration inside the container (posts nothing)"
-docker compose -f compose.prod.yaml --env-file .env run --rm --no-deps -T webserver dk check-setup || true
+docker compose -f compose.prod.yaml --env-file .env run --rm --no-deps -T webserver dk check-setup </dev/null || true
 REMOTE_SCRIPT
 echo "Done. Look at Dagster with:  ssh -L 3000:localhost:3000 $HOST   then open http://localhost:3000"

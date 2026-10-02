@@ -1,0 +1,5 @@
+# Copy to deploy/server.conf (git-ignored) and fill in. Then `make deploy` / `make deploy-secrets` just work.
+SERVER=root@203.0.113.10          # user@ip of your server
+DOMAIN=media.yourbusiness.com     # the domain pointing at it, for temporary media links
+SHARED_NETWORK=                   # only if another web server already owns ports 80/443: its Docker network
+ACCOUNT_NAME="Your Business"      # name used for the accounts in the Sheet's dropdown

@@ -63,9 +63,13 @@ Then open <http://localhost:3000>. Runs, schedules and logs are there.
 | Cleanup of abandoned media links | every 5 minutes |
 | Database backup | daily, last 14 kept in `/srv/dk/backups` on the server |
 
+## Later changes
+Changing a token or key, or the live platforms: see [update-secrets.md](update-secrets.md). In short,
+`make deploy-secrets` after editing `dk.json`, `make deploy` after anything else.
+
 ## Safe habits
-- **Update a token or a key:** edit `dk.json` on your computer, then deploy with `--secrets`. Do not
-  edit the server's copy by hand: the system rewrites it when it renews a token.
+- **Update a token or a key:** see [update-secrets.md](update-secrets.md). Do not edit the server's
+  copy by hand: the system rewrites it when it renews a token.
 - **Keep `dk.json` closed in your editor** after saving. An old window saved later overwrites newer
   values (this happened once).
 - **Backups live on the same server.** Copy `/srv/dk/backups` somewhere else now and then

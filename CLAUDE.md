@@ -95,3 +95,6 @@
   serves `api.dhakakacchi.com`, network `deploy_dhaka-kacchi`). Deploy there with `--shared deploy_dhaka-kacchi` and add
   a `media.dhakakacchi.com { reverse_proxy dk-media:80 }` block to that Caddyfile (`/opt/dhaka-kacchi/dhaka_kacchi_ai_harness/deploy/Caddyfile`).
   Our compose project is named `dk-publishing` on purpose; never run it from a folder-derived name there.
+- **When the user reports an expired/broken token or login:** the fix is documented in `docs/setup/update-secrets.md`
+  (edit local `dk.json`, `make check-setup`, `make deploy-secrets`). Server details are in the git-ignored
+  `deploy/server.conf` (copy of `deploy/server.conf.example`). Walk them through that page; never ask for token values in chat.
