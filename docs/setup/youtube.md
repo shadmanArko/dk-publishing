@@ -20,8 +20,12 @@ uv run --env-file .env dk live-test youtube --video clip.mp4 --yes
 When Google shows "this app isn't verified", choose **Advanced → continue**; it is your own app.
 
 ## Good to know
-- A new Google project is **unaudited**: YouTube keeps every uploaded video **private**, and scheduled
-  videos stay private too. To publish publicly, request an audit via Google's YouTube API Services form.
-  The system detects this and says so instead of pretending.
+- Google's documentation says videos uploaded through an **unaudited** API project are locked to
+  **private**. In our own test (October 2026) a video set to public stayed public, so you may not be
+  affected. Check by opening the video link in a private browser window. If your videos do come out
+  private (the system reports it instead of pretending), request Google's compliance audit: fill in the
+  "Audit and Quota Extension Form" (search for it on Google's "YouTube API Services" pages). It is free,
+  needs no business licence, and asks for your project number, what the app does, and a link to a
+  privacy policy; answers take days to weeks.
 - Each upload costs about 1,600 of the default 10,000 daily quota units (around six uploads a day).
 - Every video must declare whether it is made for kids: use the `made_for_kids` column (yes/no).
