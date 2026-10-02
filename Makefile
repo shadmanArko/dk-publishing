@@ -17,7 +17,7 @@ test:  ## pytest with coverage gate
 	uv run pytest --cov --cov-report=term-missing
 check: lint typecheck arch test  ## everything CI runs
 
-.PHONY: db-up db-down migrate dagster-dev seed-rehearsal check-google sheet-init sheet-init-dry meta-init meta-check meta-page-token meta-refresh
+.PHONY: db-up db-down migrate dagster-dev seed-rehearsal check-google sheet-init sheet-init-dry meta-init meta-check meta-page-token meta-refresh connect-youtube check-youtube
 db-up:  ## start the local dev Postgres (Docker) on :5433
 	docker compose -f compose.dev.yaml up -d --wait
 db-down:  ## stop it (data kept)
@@ -43,3 +43,7 @@ meta-page-token:  ## swap the user token in meta.json for the Page's own token
 	uv run --env-file .env dk meta page-token
 meta-refresh:  ## renew the tokens that expire
 	uv run --env-file .env dk meta refresh
+connect-youtube:  ## one-time YouTube login (opens your browser)
+	uv run --env-file .env dk connect youtube
+check-youtube:  ## test the saved YouTube login
+	uv run --env-file .env dk connect youtube --check

@@ -47,6 +47,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     refresh = meta_commands.add_parser("refresh", help="renew the tokens that expire")
     refresh.add_argument("--force", action="store_true", help="renew even if refreshed recently")
+    connect = commands.add_parser("connect", help="one-time login setup for a platform")
+    connect.add_argument("platform")
+    connect.add_argument("--check", action="store_true", help="only test the saved login")
     account = commands.add_parser("account", help="dry-run accounts")
     account_commands = account.add_subparsers(dest="account_command", required=True)
     account_commands.add_parser("list", help="list accounts")
@@ -74,6 +77,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _sync(allow_cancellations=args.allow_cancellations)
     if args.command == "account":
         return _account(args)
+    if args.command == "connect":
+        return _connect(args.platform, check_only=args.check)
     if args.command == "meta":
         return _meta(args.meta_command, force=getattr(args, "force", False))
 
@@ -312,3 +317,13 @@ def meta_default() -> str:
     from dk_publishing.adapters.platforms.meta_credentials import DEFAULT_PATH
 
     return str(DEFAULT_PATH)
+
+
+def _connect(platform: str, *, check_only: bool) -> int:
+    try:
+        result = composition.connect_login(platform, os.environ, check_only=check_only)
+    except ConfigError as exc:
+        print(f"[FAIL] {exc}", file=sys.stderr)
+        return 1
+    print("\n".join(result.lines))
+    return 0 if result.ok else 1

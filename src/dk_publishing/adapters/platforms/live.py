@@ -21,6 +21,8 @@ from dk_publishing.adapters.platforms.threads import DEFAULT_VERSION as THREADS_
 from dk_publishing.adapters.platforms.threads import HOST as THREADS_HOST
 from dk_publishing.adapters.platforms.threads import ThreadsPublisher
 from dk_publishing.adapters.platforms.tokens import FileTokenProvider
+from dk_publishing.adapters.platforms.youtube import YouTubePublisher
+from dk_publishing.adapters.platforms.youtube_api import GoogleYouTubeApi, YouTubeCredentials
 from dk_publishing.application.ports import Publisher
 from dk_publishing.domain.capabilities import Capabilities
 
@@ -72,6 +74,8 @@ def build_live_publisher(
         return _threads(settings, caps, env, transport)
     if name == "instagram":
         return _instagram(settings, caps, env, transport)
+    if name == "youtube":
+        return _youtube(caps, env)
     raise ConfigError(f"platform {name!r} is live but no such adapter is built yet")
 
 
@@ -135,3 +139,12 @@ def _instagram(
         version=version,
         public=_public_media(env),
     )
+
+
+def _youtube(caps: Capabilities, env: Mapping[str, str]) -> Publisher:
+    path = env.get("YOUTUBE_CREDENTIALS_FILE", "").strip()
+    if not path:
+        raise ConfigError("youtube is live but YOUTUBE_CREDENTIALS_FILE is not set in .env")
+    credentials = YouTubeCredentials(Path(path))
+    credentials.load()  # fail at start-up if the file is missing or broken; tokens are read later
+    return YouTubePublisher(api=GoogleYouTubeApi.from_credentials(credentials), capabilities=caps)

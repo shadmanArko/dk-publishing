@@ -18,6 +18,7 @@ from dk_publishing.adapters.persistence.migrate import apply_migrations
 from dk_publishing.adapters.persistence.rehearsal import create_rehearsal_drafts
 from dk_publishing.adapters.persistence.sync import new_external_id
 from dk_publishing.adapters.persistence.unit_of_work import PostgresUnitOfWork
+from dk_publishing.adapters.platforms.connect import ConnectResult, connect_from_env
 from dk_publishing.adapters.platforms.dry_run import DryRunPublisher, PostgresLedger
 from dk_publishing.adapters.platforms.live import build_live_publisher
 from dk_publishing.adapters.platforms.meta_check import (
@@ -305,3 +306,10 @@ def meta_refresh(
     return refresh_expiring_tokens(
         MetaCredentials(path), load_platforms(platforms_config), force=force
     )
+
+
+def connect_login(
+    platform: str, env: Mapping[str, str], *, check_only: bool = False
+) -> ConnectResult:
+    """One-time login setup for a platform that needs it."""
+    return connect_from_env(platform, env, check_only=check_only)
