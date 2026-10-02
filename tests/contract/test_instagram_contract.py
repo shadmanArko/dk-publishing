@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 import pytest
 
@@ -23,7 +23,8 @@ class StaticToken:
 
 
 class TestInstagram(PublisherContract):
-    bad_content = {"format": "story"}  # an empty caption is legal on Instagram; a story is not
+    # An empty caption is legal on Instagram; a story is not.
+    bad_content: ClassVar[Mapping[str, Any]] = {"format": "story"}
 
     @pytest.fixture
     def publisher(self) -> Publisher:

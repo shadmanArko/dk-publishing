@@ -133,13 +133,14 @@ def check_meta(
     settings = platforms.get("facebook")
     version = (settings.api_version if settings else None) or DEFAULT_GRAPH_VERSION
     report = check_facebook(credentials, version=version, transport=transport)
-    threads = platforms.get("threads")
-    try:
-        extra = check_threads(
-            credentials, (threads.api_version if threads else None) or THREADS_VERSION, transport
-        )
-    except ConfigError:  # no threads section in an older file: nothing to check
-        return report
+    for build in (_threads_report, _instagram_report):
+        try:
+            extra = build(credentials, platforms, transport)
+        except ConfigError:  # no such section in an older file: nothing to check
+            continue
+        report.lines.extend(extra.lines)
+        report.problems.extend(extra.problems)
+    return report
     report.lines.extend(extra.lines)
     report.problems.extend(extra.problems)
     instagram = platforms.get("instagram")
@@ -296,10 +297,35 @@ def check_instagram(
     try:
         data = graph.get(f"{account_id}/content_publishing_limit", {"fields": "quota_usage,config"})
         row = (data.get("data") or [{}])[0]
+        total = (row.get("config") or {}).get("quota_total", "?")
         report.ok(
-            f"it can publish: {row.get('quota_usage', '?')} of "
-            f"{(row.get('config') or {}).get('quota_total', '?')} API posts used in the last 24 hours"
+            f"it can publish: {row.get('quota_usage', '?')} of {total} API posts used in the "
+            "last 24 hours"
         )
     except PublishingError as exc:
         report.fail(f"it cannot publish to Instagram (needs instagram_content_publish): {exc}")
     return report
+
+
+def _threads_report(
+    credentials: MetaCredentials,
+    platforms: Mapping[str, PlatformSettings],
+    transport: httpx.BaseTransport | None,
+) -> MetaReport:
+    settings = platforms.get("threads")
+    return check_threads(
+        credentials, (settings.api_version if settings else None) or THREADS_VERSION, transport
+    )
+
+
+def _instagram_report(
+    credentials: MetaCredentials,
+    platforms: Mapping[str, PlatformSettings],
+    transport: httpx.BaseTransport | None,
+) -> MetaReport:
+    settings = platforms.get("instagram")
+    return check_instagram(
+        credentials,
+        (settings.api_version if settings else None) or DEFAULT_GRAPH_VERSION,
+        transport,
+    )

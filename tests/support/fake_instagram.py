@@ -25,17 +25,18 @@ class FakeInstagram:
         self.quota = (0, 100)
         self.quota_readable = True
         self.next_error: httpx.Response | BaseException | None = None
+        self.only: str | None = None  # restrict the next failure to GET or POST
         self._n = 0
 
     def transport(self) -> httpx.MockTransport:
         return httpx.MockTransport(self.handle)
 
-    def fail_next(self, outcome: httpx.Response | BaseException) -> None:
-        self.next_error = outcome
+    def fail_next(self, outcome: httpx.Response | BaseException, only: str | None = None) -> None:
+        self.next_error, self.only = outcome, only
 
     def handle(self, request: httpx.Request) -> httpx.Response:
         self.requests.append(request)
-        if self.next_error is not None:
+        if self.next_error is not None and self.only in (None, request.method):
             outcome, self.next_error = self.next_error, None
             if isinstance(outcome, BaseException):
                 raise outcome

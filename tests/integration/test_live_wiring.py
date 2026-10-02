@@ -92,7 +92,7 @@ def test_a_platform_marked_live_without_an_adapter_is_refused(
     conninfo: str, tmp_path: Path
 ) -> None:
     config = tmp_path / "platforms.yaml"
-    config.write_text("platforms:\n  instagram: {mode: live}\n")
+    config.write_text("platforms:\n  tiktok: {mode: live}\n")
     with pytest.raises(ConfigError, match="no such adapter is built yet"):
         composition.build_services(conninfo, config, env=LIVE_ENV)
 

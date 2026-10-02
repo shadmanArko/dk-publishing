@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable, Mapping, Sequence
-from typing import Any
+from typing import Any, ClassVar
 
 import pytest
 
@@ -24,7 +24,7 @@ GOOD = {"caption": "Kacchi biryani, Friday only"}
 class PublisherContract:
     # What this platform considers invalid content. A platform where an empty caption is legal
     # (a reel needs no words) overrides this with something it does refuse.
-    bad_content: Mapping[str, Any] = {"caption": ""}
+    bad_content: ClassVar[Mapping[str, Any]] = {"caption": ""}
 
     @pytest.fixture
     def media(self) -> Sequence[Rendition]:
