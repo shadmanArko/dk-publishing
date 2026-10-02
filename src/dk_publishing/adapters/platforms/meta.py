@@ -1,4 +1,4 @@
-"""Shared plumbing for the Meta Graph API (Facebook, and later Instagram and Threads).
+"""Shared plumbing for the Meta Graph APIs (Facebook, Instagram and Threads).
 
 One client, one error mapping. Every failure becomes one of the five domain errors, and the
 rule that keeps posts from being duplicated lives here: a call that changes something
@@ -81,7 +81,11 @@ class GraphClient:
         connect_timeout: float = 10.0,
         read_timeout: float = 120.0,
         upload_timeout: float = 900.0,
+        host: str = GRAPH,
+        video_host: str = GRAPH_VIDEO,
     ) -> None:
+        self._host = host
+        self._video_host = video_host
         self._version = version
         self._tokens = tokens
         self._connect = connect_timeout
@@ -92,7 +96,9 @@ class GraphClient:
     def get(self, path: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
         """A read. Safe to repeat, so server trouble is Retryable."""
         query = {**(params or {}), "access_token": self._tokens.token()}
-        return self._send("GET", f"{GRAPH}/{self._version}/{path}", idempotent=True, params=query)
+        return self._send(
+            "GET", f"{self._host}/{self._version}/{path}", idempotent=True, params=query
+        )
 
     def post(
         self,
@@ -104,7 +110,7 @@ class GraphClient:
     ) -> dict[str, Any]:
         """A write. Never retried here; trouble after the request left is UnknownOutcome."""
         body = {**data, "access_token": self._tokens.token()}
-        host = GRAPH_VIDEO if video else GRAPH
+        host = self._video_host if video else self._host
         files = {file[0]: file[1]} if file else None
         return self._send(
             "POST",
@@ -115,12 +121,24 @@ class GraphClient:
             timeout=self._upload if file else self._read,
         )
 
+    def upload(self, url: str, file: BinaryIO, *, size: int) -> dict[str, Any]:
+        """Send a file's raw bytes to an upload URL Meta gave us (Instagram's resumable upload).
+        A write: a lost answer is UnknownOutcome. The token travels in the header Meta requires."""
+        headers = {
+            "Authorization": f"OAuth {self._tokens.token()}",
+            "offset": "0",
+            "file_size": str(size),
+        }
+        return self._send(
+            "POST", url, idempotent=False, content=file, headers=headers, timeout=self._upload
+        )
+
     def delete(self, path: str) -> dict[str, Any]:
         """Remove something. Repeating it is harmless (it is already gone), so server trouble
         is simply Retryable."""
         params = {"access_token": self._tokens.token()}
         return self._send(
-            "DELETE", f"{GRAPH}/{self._version}/{path}", idempotent=True, params=params
+            "DELETE", f"{self._host}/{self._version}/{path}", idempotent=True, params=params
         )
 
     def _send(

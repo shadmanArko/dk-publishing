@@ -17,9 +17,9 @@ defaults:
   max_lateness: 2h
   prepare_lead: 30m
 platforms:
-  facebook:  {tab: Facebook, mode: dry_run, api_version: v25.0, native_window: [10m, 30d], prepare_lead: 5m}
-  instagram: {tab: Instagram, mode: dry_run, prepare_lead: 30m, prepared_ttl: 24h, pulls_media_by_url: true}
-  threads:   {tab: Threads, mode: dry_run, prepare_lead: 10m, pulls_media_by_url: true}
+  facebook:  {tab: Facebook, mode: live, api_version: v25.0, native_window: [10m, 30d], prepare_lead: 5m}
+  instagram: {tab: Instagram, mode: dry_run, api_version: v25.0, prepare_lead: 30m, prepared_ttl: 24h, pulls_media_by_url: true}
+  threads:   {tab: Threads, mode: dry_run, api_version: v1.0, prepare_lead: 10m, pulls_media_by_url: true}
   youtube:   {tab: YouTube, mode: dry_run, native_window: [15m, 180d], prepare_lead: 5m}
   tiktok:    {tab: TikTok, mode: dry_run}
   linkedin:  {tab: LinkedIn, mode: dry_run}

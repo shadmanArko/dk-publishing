@@ -12,6 +12,7 @@ import yaml
 from dagster import (
     DagsterInstance,
     Definitions,
+    EnvVar,
     ExecuteInProcessResult,
     RunRequest,
     SkipReason,
@@ -196,8 +197,8 @@ def test_the_queue_allows_one_run_per_account_and_one_sync_at_a_time() -> None:
     assert prod["storage"]["postgres"]["postgres_url"] == {"env": "DAGSTER_DATABASE_URL"}
 
 
-def test_build_services_wires_only_platforms_that_are_on(conninfo: str) -> None:
-    services = composition.build_services(conninfo)
+def test_build_services_wires_only_platforms_that_are_on(conninfo: str, dry_config: Path) -> None:
+    services = composition.build_services(conninfo, dry_config)
     assert services.publishers.for_platform("instagram").capabilities.native_window is None
     # Facebook keeps its native window; each row's `delivery` decides whether the planner uses it.
     assert services.publishers.for_platform("facebook").capabilities.native_window == (
@@ -218,7 +219,7 @@ def test_a_platform_without_an_adapter_stops_start_up(tmp_path: Path, conninfo: 
 
 
 def test_the_database_url_comes_from_the_environment(
-    conninfo: str, monkeypatch: pytest.MonkeyPatch, seed: Seed
+    conninfo: str, monkeypatch: pytest.MonkeyPatch, seed: Seed, dry_config: Path
 ) -> None:
     """The real, unfaked resource builds working services from DATABASE_URL."""
     monkeypatch.setenv("DATABASE_URL", conninfo)
@@ -229,22 +230,34 @@ def test_the_database_url_comes_from_the_environment(
                VALUES ('dk', %s::uuid, 'instagram', %s::uuid, now())""",
             (post_id, account_id),
         )
-    resolved = defs.get_job_def("housekeeping").execute_in_process(
+    unfaked = build_definitions(
+        ServicesResource(database_url=EnvVar("DATABASE_URL"), platforms_config=str(dry_config))
+    )
+    resolved = unfaked.get_job_def("housekeeping").execute_in_process(
         instance=DagsterInstance.ephemeral()
     )
     assert resolved.success
 
 
-def test_rehearsal_seeding_covers_every_platform_that_is_on(conninfo: str) -> None:
+def test_rehearsal_seeding_uses_dry_run_platforms_only_never_the_live_one(conninfo: str) -> None:
     results = composition.seed_rehearsal(
         conninfo, count=2, spacing=timedelta(minutes=5), platforms=None
     )
-    assert results == [R.APPROVED] * 12  # 2 posts x the 6 platforms that are not off
+    assert results == [R.APPROVED] * 10  # 2 posts x the 5 dry-run platforms
     with psycopg.connect(conninfo) as conn:
         platforms = {
             r[0] for r in conn.execute("SELECT DISTINCT platform FROM publishing.variants")
         }
-    assert len(platforms) == 6 and not platforms & {"x", "reddit"}
+    assert len(platforms) == 5 and not platforms & {"x", "reddit", "facebook"}
+
+
+def test_a_rehearsal_cannot_be_pointed_at_a_live_platform(conninfo: str) -> None:
+    with pytest.raises(ConfigError, match="facebook: not a dry-run platform"):
+        composition.seed_rehearsal(
+            conninfo, count=1, spacing=timedelta(minutes=5), platforms=["facebook"]
+        )
+    with psycopg.connect(conninfo) as conn:
+        assert conn.execute("SELECT count(*) FROM publishing.variants").fetchone() == (0,)
 
 
 def test_a_native_post_is_handed_over_by_its_own_job_and_published_by_the_platform(

@@ -31,6 +31,7 @@ from dk_publishing.adapters.platforms.meta_credentials import (
     write_template_from_env,
 )
 from dk_publishing.adapters.platforms.registry import StaticPublisherRegistry
+from dk_publishing.adapters.platforms.threads_token import RefreshResult, refresh_expiring_tokens
 from dk_publishing.adapters.sheets.gateway import GoogleSheetGateway
 from dk_publishing.adapters.sheets.google_access import (
     AccessReport,
@@ -105,6 +106,21 @@ def _media_store(env: Mapping[str, str]) -> DriveMediaStore:
     return DriveMediaStore(GoogleDriveDownloader(drive), folder)
 
 
+def _rehearsal_services(database_url: str) -> Services:
+    """Services holding dry-run publishers only, even if the config has live platforms."""
+    ledger = PostgresLedger(database_url)
+    publishers: dict[str, Publisher] = {
+        name: DryRunPublisher(name, settings.capabilities, ledger, clock=SystemClock())
+        for name, settings in load_platforms(DEFAULT_PLATFORMS_CONFIG).items()
+        if settings.mode is Mode.DRY_RUN
+    }
+    return Services(
+        uow=lambda: PostgresUnitOfWork(database_url),
+        publishers=StaticPublisherRegistry(publishers),
+        clock=SystemClock(),
+    )
+
+
 def seed_rehearsal(
     database_url: str,
     *,
@@ -113,14 +129,25 @@ def seed_rehearsal(
     platforms: Sequence[str] | None = None,
     tenant_id: str = "dk",
 ) -> list[RunResult]:
-    """Create `count` posts spaced `spacing` apart, starting one spacing from now; approve them."""
-    services = build_services(database_url)
-    if platforms is None:  # every platform that is switched on in config
-        platforms = [
-            name
-            for name, settings in load_platforms(DEFAULT_PLATFORMS_CONFIG).items()
-            if settings.mode is Mode.DRY_RUN
-        ]
+    """Create `count` posts spaced `spacing` apart, starting one spacing from now; approve them.
+
+    A rehearsal never touches a live platform: only platforms in `dry_run` mode can be used,
+    whatever the config says elsewhere, so it can never make a real post.
+    """
+    services = _rehearsal_services(database_url)
+    dry = [
+        name
+        for name, settings in load_platforms(DEFAULT_PLATFORMS_CONFIG).items()
+        if settings.mode is Mode.DRY_RUN
+    ]
+    if platforms is None:
+        platforms = dry
+    refused = [name for name in platforms if name not in dry]
+    if refused:
+        raise ConfigError(
+            f"{', '.join(refused)}: not a dry-run platform, so a rehearsal cannot use it "
+            "(live platforms post for real)"
+        )
     start = services.clock.now()
     slots = [start + spacing * n for n in range(1, count + 1)]
     drafts = create_rehearsal_drafts(
@@ -269,3 +296,12 @@ def meta_check(path: Path, platforms_config: Path = DEFAULT_PLATFORMS_CONFIG) ->
 def meta_page_token(path: Path, platforms_config: Path = DEFAULT_PLATFORMS_CONFIG) -> SwapResult:
     """Swap the user token in the credentials file for the Page's own token."""
     return swap_for_page_token(MetaCredentials(path), load_platforms(platforms_config))
+
+
+def meta_refresh(
+    path: Path, platforms_config: Path = DEFAULT_PLATFORMS_CONFIG, force: bool = False
+) -> RefreshResult:
+    """Renew the tokens that expire (and can be renewed) in the credentials file."""
+    return refresh_expiring_tokens(
+        MetaCredentials(path), load_platforms(platforms_config), force=force
+    )

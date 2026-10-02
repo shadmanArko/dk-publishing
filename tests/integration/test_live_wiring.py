@@ -33,13 +33,23 @@ def no_google(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(composition, "connect", lambda path: (None, object(), "sa@x", None))
 
 
-def test_the_shipped_config_is_dry_run_everywhere_so_nothing_posts_by_accident(
-    conninfo: str,
+def test_the_shipped_config_has_exactly_one_live_platform_and_the_rest_cannot_post(
+    conninfo: str, tmp_path: Path
 ) -> None:
-    services = composition.build_services(conninfo)
-    assert services.media_store is None
-    for name in ("facebook", "instagram", "threads", "youtube", "tiktok", "linkedin"):
-        assert isinstance(services.publishers.for_platform(name), DryRunPublisher)
+    env = {**LIVE_ENV, "META_CREDENTIALS_FILE": str(make_credentials(tmp_path))}
+    services = composition.build_services(conninfo, env=env)
+    assert isinstance(services.publishers.for_platform("facebook"), FacebookPublisher)
+    for name in ("instagram", "threads", "youtube", "tiktok", "linkedin"):
+        assert isinstance(services.publishers.for_platform(name), DryRunPublisher), name
+
+
+def make_credentials(tmp_path: Path) -> Path:
+    path = tmp_path / "meta.json"
+    path.write_text(
+        '{"facebook": {"page_id": "PAGE", "access_token": "x"},'
+        ' "threads": {"user_id": "TH1", "access_token": "y"}}'
+    )
+    return path
 
 
 def test_live_facebook_builds_the_real_adapter_and_a_media_store(

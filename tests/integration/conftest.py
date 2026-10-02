@@ -139,3 +139,13 @@ class Seed:
 @pytest.fixture
 def seed(conninfo: str) -> Seed:
     return Seed(conninfo)
+
+
+@pytest.fixture
+def dry_config(tmp_path: Path) -> Path:
+    """A copy of the shipped platforms config with every live platform switched to dry_run, for
+    tests that exercise the machinery and must never need real credentials."""
+    source = Path(__file__).resolve().parents[2] / "config" / "platforms.yaml"
+    path = tmp_path / "platforms.yaml"
+    path.write_text(source.read_text().replace("mode: live", "mode: dry_run"))
+    return path

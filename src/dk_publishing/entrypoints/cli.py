@@ -45,6 +45,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     meta_commands.add_parser(
         "page-token", help="swap the user token in the file for the Page's own token"
     )
+    refresh = meta_commands.add_parser("refresh", help="renew the tokens that expire")
+    refresh.add_argument("--force", action="store_true", help="renew even if refreshed recently")
     account = commands.add_parser("account", help="dry-run accounts")
     account_commands = account.add_subparsers(dest="account_command", required=True)
     account_commands.add_parser("list", help="list accounts")
@@ -73,7 +75,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "account":
         return _account(args)
     if args.command == "meta":
-        return _meta(args.meta_command)
+        return _meta(args.meta_command, force=getattr(args, "force", False))
 
     database_url = os.environ.get("DATABASE_URL", "").strip()
     if not database_url:
@@ -267,7 +269,7 @@ def _sample() -> int:
     return 0
 
 
-def _meta(command: str) -> int:
+def _meta(command: str, *, force: bool = False) -> int:
     path = Path(os.environ.get("META_CREDENTIALS_FILE", "").strip() or meta_default()).expanduser()
     if command == "init":
         created = composition.meta_init(path, os.environ)
@@ -279,6 +281,14 @@ def _meta(command: str) -> int:
         if not os.environ.get("META_CREDENTIALS_FILE", "").strip():
             print(f"Also add this line to .env:  META_CREDENTIALS_FILE={path}")
         return 0
+    if command == "refresh":
+        try:
+            outcome = composition.meta_refresh(path, force=force)
+        except ConfigError as exc:
+            print(f"[FAIL] {exc}", file=sys.stderr)
+            return 1
+        print(f"[{'ok' if outcome.ok else 'FAIL'}]   {outcome.message}")
+        return 0 if outcome.ok else 1
     if command == "page-token":
         try:
             result = composition.meta_page_token(path)

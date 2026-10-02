@@ -63,15 +63,26 @@ class MetaCredentials:
 
 
 class SectionTokenProvider:
-    """The `access_token` of one section, re-read on every call."""
+    """The `access_token` of one section, re-read on every call.
 
-    def __init__(self, credentials: MetaCredentials, section: str) -> None:
+    With `fallback`, a section whose token is empty uses another section's. Instagram publishing
+    through Facebook Login uses the Facebook Page token, so one token can serve both.
+    """
+
+    def __init__(
+        self, credentials: MetaCredentials, section: str, fallback: str | None = None
+    ) -> None:
         self._credentials = credentials
         self._section = section
+        self._fallback = fallback
 
     def token(self) -> str:
         try:
             value = str(self._credentials.section(self._section).get("access_token") or "").strip()
+            if not value and self._fallback:
+                value = str(
+                    self._credentials.section(self._fallback).get("access_token") or ""
+                ).strip()
         except ConfigError as exc:
             raise AuthFailed(str(exc)) from None
         if not value:

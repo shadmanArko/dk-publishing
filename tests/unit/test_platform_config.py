@@ -44,7 +44,10 @@ def test_bad_durations_are_refused(bad: str) -> None:
 def test_the_shipped_config_loads_and_every_platform_is_valid() -> None:
     platforms = load_platforms(DEFAULT_PLATFORMS_CONFIG)
     assert len(platforms) == 8
-    assert {p.mode for p in platforms.values()} <= {Mode.DRY_RUN, Mode.OFF}
+    # Going live is a deliberate act, so the platforms allowed to be live are listed here by name:
+    # a new one slipping into the shipped config fails this test.
+    assert {n for n, p in platforms.items() if p.mode is Mode.LIVE} == {"facebook"}
+    assert {p.mode for p in platforms.values()} <= {Mode.DRY_RUN, Mode.OFF, Mode.LIVE}
     assert all(p.capabilities.max_lateness == 2 * H for p in platforms.values())
 
 
