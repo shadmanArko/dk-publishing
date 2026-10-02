@@ -1,5 +1,13 @@
-# The production stack. Everything runs from one image; only Caddy is reachable from outside.
+# The production stack. Everything runs from one image. Two ways to serve the temporary media
+# links, chosen by COMPOSE_PROFILES (deploy.sh sets it):
+#   standalone  this stack's own Caddy owns ports 80/443 and gets the HTTPS certificate (fresh server)
+#   shared      the server already has a web server on 80/443 (for example another Caddy): this stack
+#               publishes no ports and joins that server's Docker network as `dk-media`; the existing
+#               web server proxies the media domain to it (see docs/setup/deploy.md).
 # Start it with deploy/deploy.sh (it fills in the environment file for you).
+# An explicit name, so it can never be mistaken for another project in a folder called `deploy`.
+name: dk-publishing
+
 x-app: &app
   image: dk-publishing:latest
   restart: unless-stopped
@@ -52,8 +60,22 @@ services:
     ports:
       - "127.0.0.1:${DK_UI_PORT:-3000}:3000"   # reachable only from the server itself: use an SSH tunnel to look at it
 
+  media:
+    image: caddy:2
+    profiles: ["shared"]
+    restart: unless-stopped
+    volumes:
+      - ./Caddyfile.internal:/etc/caddy/Caddyfile:ro
+      - public:/srv/public:ro
+      - media:/srv/media:ro
+    networks:
+      default: {}
+      proxy:
+        aliases: [dk-media]
+
   caddy:
     image: caddy:2
+    profiles: ["standalone"]
     restart: unless-stopped
     environment:
       MEDIA_SITE: ${MEDIA_SITE}
@@ -85,6 +107,11 @@ services:
           find /backups -name 'dk-*.sql.gz' -mtime +14 -delete
           sleep 86400
         done
+
+networks:
+  proxy:                      # only used in `shared` mode: the existing web server's network
+    name: ${DK_PROXY_NETWORK:-dk-proxy}
+    external: true
 
 volumes:
   pgdata:

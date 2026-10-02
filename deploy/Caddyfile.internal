@@ -1,0 +1,17 @@
+# Shared-server mode: another web server terminates HTTPS and forwards the media domain here.
+# Same rules as Caddyfile: only exact token links are served, never a listing.
+{
+	auto_https off
+}
+
+:80 {
+	root * /srv/public
+	@file path_regexp ^/[A-Za-z0-9_-]{20,}/[^/]+$
+	handle @file {
+		header Cache-Control "no-store"
+		file_server
+	}
+	handle {
+		respond "Not found" 404
+	}
+}

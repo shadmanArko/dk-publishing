@@ -91,3 +91,7 @@
   `config/platforms.yaml`, and the shipped config stays dry-run. Secrets dir `/srv/dk/secrets` is owned by uid 10001
   and must stay writable (tokens renew in place). Only ONE compose service may carry `build:` (migrate), or parallel
   builds collide on the image name. Nightly `renew_tokens` and the 5-minute public-link sweep are what keep it unattended.
+- **Shared servers:** the Contabo server already runs the ordering system (project `deploy`, its Caddy owns 80/443 and
+  serves `api.dhakakacchi.com`, network `deploy_dhaka-kacchi`). Deploy there with `--shared deploy_dhaka-kacchi` and add
+  a `media.dhakakacchi.com { reverse_proxy dk-media:80 }` block to that Caddyfile (`/opt/dhaka-kacchi/dhaka_kacchi_ai_harness/deploy/Caddyfile`).
+  Our compose project is named `dk-publishing` on purpose; never run it from a folder-derived name there.

@@ -16,11 +16,20 @@ tunnel.
 The domain is needed only for Instagram and Threads photos and Instagram reels: those platforms
 download the file from a public address. Caddy gets the HTTPS certificate by itself.
 
+## Fresh server or shared server?
+- **Fresh server (nothing else on ports 80/443):** use the steps below as written. This stack brings
+  its own web server and gets the HTTPS certificate itself.
+- **Shared server (another web server such as Caddy already owns 80/443, for example your ordering
+  system):** follow the steps, but use `DK_SHARED_SERVER=1` in step 1 and `--shared NETWORK` in step 3
+  (see "Shared server" at the end). Nothing existing is touched except one block you add to the
+  existing web server.
+
 ## 1. Prepare the server (once)
 ```bash
 ssh root@SERVER 'bash -s' < deploy/bootstrap.sh
 ```
-This installs Docker, the firewall (22, 80, 443), fail2ban and automatic security updates. If your
+On a shared server use `ssh root@SERVER 'DK_SHARED_SERVER=1 bash -s' < deploy/bootstrap.sh`, which
+only creates this project's folders. For a fresh server this installs Docker, the firewall (22, 80, 443), fail2ban and automatic security updates. If your
 SSH key is installed it also turns password login off.
 
 ## 2. Decide what is live
@@ -69,3 +78,19 @@ Then open <http://localhost:3000>. Runs, schedules and logs are there.
 | Deploy ends with `[FAIL]` lines | read them: they name the missing value in `dk.json` |
 | No Telegram message arrives | `ssh root@SERVER 'cd /srv/dk/app/deploy && docker compose -f compose.prod.yaml --env-file .env logs daemon \| tail -50'` |
 | Instagram says it cannot fetch the media | the domain must point at the server and port 443 must be open: `curl -I https://media.yourbusiness.com/` should answer `404` (that is correct: only exact links work) |
+
+## Shared server (another web server already owns ports 80 and 443)
+1. Find the existing web server's Docker network: `docker inspect <its container> --format '{{range $k,$v := .NetworkSettings.Networks}}{{$k}} {{end}}'`
+2. Deploy with that network: `deploy/deploy.sh root@SERVER media.yourbusiness.com --secrets --shared NETWORK`.
+   This stack then publishes no ports and is reachable on that network as `dk-media`.
+3. Add this block to the existing web server's Caddyfile and reload it:
+   ```
+   media.yourbusiness.com {
+   	reverse_proxy dk-media:80
+   }
+   ```
+   Back the file up first, check it with `caddy validate`, then `caddy reload` (a reload keeps
+   serving; an invalid file is refused and the old one stays active).
+4. Check from outside: `curl -I https://media.yourbusiness.com/` answers `404` (correct).
+The project is always named `dk-publishing`, so it can never be confused with another Compose project
+on the server.

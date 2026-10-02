@@ -1,8 +1,24 @@
 #!/usr/bin/env bash
-# Prepare a fresh Ubuntu/Debian server (run ONCE, as root, on the server):
+# Prepare a server (run ONCE, as root, on the server):
 #   ssh root@SERVER 'bash -s' < deploy/bootstrap.sh
+# On a server that already runs other things, use the shared mode, which changes nothing but adds
+# this project's folders:
+#   ssh root@SERVER 'DK_SHARED_SERVER=1 bash -s' < deploy/bootstrap.sh
 set -euo pipefail
 [ "$(id -u)" -eq 0 ] || { echo "run as root"; exit 1; }
+
+mkdir_private() { mkdir -p "$1" && chmod 700 "$1"; }
+
+if [ "${DK_SHARED_SERVER:-}" = "1" ]; then
+  for tool in docker rsync openssl; do
+    command -v "$tool" >/dev/null || { echo "missing on the server: $tool"; exit 1; }
+  done
+  mkdir -p /srv/dk/app /srv/dk/secrets /srv/dk/backups
+  chown 10001:10001 /srv/dk/secrets
+  chmod 700 /srv/dk/secrets /srv/dk/backups
+  echo "Shared server: only created /srv/dk. Firewall, SSH and Docker were left alone."
+  exit 0
+fi
 
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -y
@@ -33,7 +49,8 @@ systemctl enable --now fail2ban
 dpkg-reconfigure -f noninteractive unattended-upgrades || true
 
 # Folders. 10001 is the user inside the app image.
-mkdir -p /srv/dk/app /srv/dk/secrets /srv/dk/backups
+mkdir_private /srv/dk/backups
+mkdir -p /srv/dk/app /srv/dk/secrets
 chown 10001:10001 /srv/dk/secrets
-chmod 700 /srv/dk/secrets /srv/dk/backups
+chmod 700 /srv/dk/secrets
 echo "Server ready. Next, from your computer: deploy/deploy.sh root@THIS_SERVER media.example.com --secrets"
