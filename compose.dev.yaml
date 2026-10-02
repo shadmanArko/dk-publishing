@@ -1,4 +1,6 @@
-# Local development Postgres only. The full production stack comes with the deploy slice.
+# Local development Postgres only. The production stack is deploy/compose.prod.yaml.
+# A name of its own, so cleaning up a production-stack test (`down -v`) can never delete this database.
+name: dk-publishing-dev
 services:
   postgres:
     image: postgres:16

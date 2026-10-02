@@ -13,7 +13,9 @@ x-app: &app
   restart: unless-stopped
   environment: &app-env
     DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/dk_publishing
-    DAGSTER_DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/dagster
+    # "+psycopg2" is required: SQLAlchemy 2.1 otherwise picks the newer psycopg driver, and Dagster's
+    # Postgres storage then fails on "NOTIFY ... $1", so no run can launch (found on the first deploy).
+    DAGSTER_DATABASE_URL: postgresql+psycopg2://postgres:${POSTGRES_PASSWORD}@postgres:5432/dagster
     DK_CONFIG_FILE: /etc/dk-publishing/dk.json
     TZ: Europe/Berlin
   volumes:

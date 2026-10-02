@@ -1,6 +1,7 @@
 # Production: run storage in the separate `dagster` Postgres database (never the `app` one).
 telemetry:
   enabled: false
+# DAGSTER_DATABASE_URL must start with postgresql+psycopg2:// (see deploy/compose.prod.yaml).
 storage:
   postgres:
     postgres_url:
