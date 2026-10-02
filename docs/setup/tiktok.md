@@ -2,7 +2,7 @@
 
 TikTok works in **assisted mode**: at the scheduled time the server sends **you** a Telegram message
 with the caption ready to copy and the video attached. You open TikTok, upload the video, paste the
-caption and tap Post. The Sheet shows the row as **sent to you**.
+caption and tap Post. The Sheet shows the row as **sent to you**, with no link (nothing is posted by the system).
 
 It is assisted rather than automatic because of TikTok's rules (see the end of this page).
 
