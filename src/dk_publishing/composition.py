@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from collections.abc import Mapping, Sequence
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -11,6 +12,7 @@ import httpx
 
 from dk_publishing.adapters.clock import SystemClock
 from dk_publishing.adapters.config.platforms import ConfigError, Mode, load_platforms
+from dk_publishing.adapters.config.secrets_file import split_ref
 from dk_publishing.adapters.config.sheet_layout import load_sheet_layout
 from dk_publishing.adapters.media.drive_catalog import DriveCatalog, sheet_modified_time
 from dk_publishing.adapters.media.drive_store import DriveMediaStore, GoogleDriveDownloader
@@ -28,8 +30,13 @@ from dk_publishing.adapters.persistence.rehearsal import create_rehearsal_drafts
 from dk_publishing.adapters.persistence.sync import new_external_id
 from dk_publishing.adapters.persistence.unit_of_work import PostgresUnitOfWork
 from dk_publishing.adapters.platforms.connect import ConnectResult, connect_from_env
+from dk_publishing.adapters.platforms.dk_file import (
+    DEFAULT_PATH as DEFAULT_CONFIG_PATH,
+)
+from dk_publishing.adapters.platforms.dk_file import config_path, create_template, resolve_env
 from dk_publishing.adapters.platforms.dry_run import DryRunPublisher, PostgresLedger
 from dk_publishing.adapters.platforms.live import build_live_publisher
+from dk_publishing.adapters.platforms.live_test import LiveTestResult, run_live_test
 from dk_publishing.adapters.platforms.meta_check import (
     MetaReport,
     SwapResult,
@@ -41,6 +48,7 @@ from dk_publishing.adapters.platforms.meta_credentials import (
     write_template_from_env,
 )
 from dk_publishing.adapters.platforms.registry import StaticPublisherRegistry
+from dk_publishing.adapters.platforms.setup_check import SetupReport, check_setup
 from dk_publishing.adapters.platforms.threads_token import (
     RefreshResult,
     expiry_warnings,
@@ -303,23 +311,27 @@ def _sample_cells(cells: Mapping[str, Any]) -> dict[str, Any]:
     return out
 
 
-def meta_init(path: Path, env: Mapping[str, str]) -> bool:
+def meta_init(path: Path | str, env: Mapping[str, str]) -> bool:
     """Create the one-file Meta credentials template (no secrets in it). False if it exists."""
-    return write_template_from_env(path, env)
+    if split_ref(path)[1] is not None:
+        return False  # a section of dk.json; `dk init` made it
+    return write_template_from_env(Path(path), env)
 
 
-def meta_check(path: Path, platforms_config: Path = DEFAULT_PLATFORMS_CONFIG) -> MetaReport:
+def meta_check(path: Path | str, platforms_config: Path = DEFAULT_PLATFORMS_CONFIG) -> MetaReport:
     """Ask Meta what the credentials file's tokens can do. Never posts."""
     return check_meta(MetaCredentials(path), load_platforms(platforms_config))
 
 
-def meta_page_token(path: Path, platforms_config: Path = DEFAULT_PLATFORMS_CONFIG) -> SwapResult:
+def meta_page_token(
+    path: Path | str, platforms_config: Path = DEFAULT_PLATFORMS_CONFIG
+) -> SwapResult:
     """Swap the user token in the credentials file for the Page's own token."""
     return swap_for_page_token(MetaCredentials(path), load_platforms(platforms_config))
 
 
 def meta_refresh(
-    path: Path, platforms_config: Path = DEFAULT_PLATFORMS_CONFIG, force: bool = False
+    path: Path | str, platforms_config: Path = DEFAULT_PLATFORMS_CONFIG, force: bool = False
 ) -> RefreshResult:
     """Renew the tokens that expire (and can be renewed) in the credentials file."""
     return refresh_expiring_tokens(
@@ -334,10 +346,8 @@ def connect_login(
     return connect_from_env(platform, env, check_only=check_only)
 
 
-def telegram_path(env: Mapping[str, str]) -> Path:
-    return Path(
-        env.get("TELEGRAM_CREDENTIALS_FILE", "").strip() or DEFAULT_TELEGRAM_PATH
-    ).expanduser()
+def telegram_path(env: Mapping[str, str]) -> str:
+    return env.get("TELEGRAM_CREDENTIALS_FILE", "").strip() or str(DEFAULT_TELEGRAM_PATH)
 
 
 def telegram_setup(command: str, env: Mapping[str, str]) -> SetupResult:
@@ -366,13 +376,44 @@ def build_alert_services(database_url: str) -> Services:
 
 def credential_warnings(env: Mapping[str, str]) -> list[str]:
     """Tokens that need attention soon, in words, for the daily digest."""
-    path = env.get("META_CREDENTIALS_FILE", "").strip()
-    if not path or not Path(path).expanduser().exists():
+    ref = env.get("META_CREDENTIALS_FILE", "").strip()
+    if not ref or not split_ref(ref)[0].exists():
         return []
-    return expiry_warnings(MetaCredentials(Path(path)))
+    return expiry_warnings(MetaCredentials(ref))
 
 
 def ping_alive(env: Mapping[str, str]) -> bool | None:
     """Ping the external dead-man's switch. None when none is configured."""
     url = env.get("HEARTBEAT_URL", "").strip()
     return ping_heartbeat(url) if url else None
+
+
+def environment() -> dict[str, str]:
+    """The process environment plus everything in dk.json (when DK_CONFIG_FILE is set)."""
+    return resolve_env(os.environ)
+
+
+def init_config(env: Mapping[str, str]) -> tuple[Path, bool]:
+    """Create the empty dk.json (and its folder). Returns its path and whether it was created."""
+    path = config_path(env) or DEFAULT_CONFIG_PATH.expanduser()
+    return path, create_template(path)
+
+
+def check_setup_report(env: Mapping[str, str]) -> SetupReport:
+    """Test everything in dk.json without posting anything."""
+    return check_setup(env, load_platforms(DEFAULT_PLATFORMS_CONFIG))
+
+
+def live_test(
+    platform: str,
+    env: Mapping[str, str],
+    *,
+    text: str | None = None,
+    video: Path | None = None,
+    confirmed: bool = False,
+) -> LiveTestResult:
+    """Publish one small real post on a platform and read it back. Needs `confirmed`."""
+    settings = load_platforms(DEFAULT_PLATFORMS_CONFIG).get(platform)
+    if settings is None:
+        raise ConfigError(f"{platform!r} is not in config/platforms.yaml")
+    return run_live_test(platform, env, settings, text=text, video=video, confirmed=confirmed)

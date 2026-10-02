@@ -39,7 +39,7 @@ def build_live_publisher(
     if name == "facebook":
         one_file = env.get("META_CREDENTIALS_FILE", "").strip()
         if one_file:
-            credentials = MetaCredentials(Path(one_file))
+            credentials = MetaCredentials(one_file)
             page_id = str(credentials.section("facebook").get("page_id") or "").strip()
             if not page_id:
                 raise ConfigError(f"facebook.page_id is empty in {credentials.path}")
@@ -83,7 +83,7 @@ def _credentials(env: Mapping[str, str], platform: str) -> MetaCredentials:
     one_file = env.get("META_CREDENTIALS_FILE", "").strip()
     if not one_file:
         raise ConfigError(f"{platform} is live but META_CREDENTIALS_FILE is not set in .env")
-    return MetaCredentials(Path(one_file))
+    return MetaCredentials(one_file)
 
 
 def _public_media(env: Mapping[str, str]) -> PublicMediaStore | None:
@@ -145,6 +145,6 @@ def _youtube(caps: Capabilities, env: Mapping[str, str]) -> Publisher:
     path = env.get("YOUTUBE_CREDENTIALS_FILE", "").strip()
     if not path:
         raise ConfigError("youtube is live but YOUTUBE_CREDENTIALS_FILE is not set in .env")
-    credentials = YouTubeCredentials(Path(path))
+    credentials = YouTubeCredentials(path)
     credentials.load()  # fail at start-up if the file is missing or broken; tokens are read later
     return YouTubePublisher(api=GoogleYouTubeApi.from_credentials(credentials), capabilities=caps)

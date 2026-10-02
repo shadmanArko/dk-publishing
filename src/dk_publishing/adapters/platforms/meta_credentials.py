@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from dk_publishing.adapters.config.platforms import ConfigError
+from dk_publishing.adapters.config.secrets_file import SecretsFile
 from dk_publishing.domain.errors import AuthFailed
 
 DEFAULT_PATH = Path("~/.config/dk-publishing/meta.json")
@@ -23,40 +24,26 @@ HELP = (
 
 
 class MetaCredentials:
-    def __init__(self, path: Path) -> None:
-        self.path = path.expanduser()
+    def __init__(self, path: Path | str) -> None:
+        self._file = SecretsFile(path, what="Meta credentials")
+        self.path = self._file.path
 
     def _load(self) -> dict[str, Any]:
-        try:
-            data = json.loads(self.path.read_text())
-        except OSError:
-            raise ConfigError(f"cannot read the Meta credentials file {self.path}") from None
-        except json.JSONDecodeError as exc:
-            raise ConfigError(f"{self.path} is not valid JSON (line {exc.lineno})") from None
-        if not isinstance(data, dict):
-            raise ConfigError(f"{self.path} must hold a JSON object")
-        return data
+        return self._file.read()
 
     def section(self, name: str) -> Mapping[str, Any]:
         section = self._load().get(name)
         if not isinstance(section, dict):
-            raise ConfigError(f"{self.path} has no '{name}' section; run `dk meta init`")
+            raise ConfigError(f"{self.path} has no '{name}' section; run `dk init`")
         return section
 
     def update_section(self, name: str, changes: Mapping[str, Any]) -> None:
         """Change fields of one section and write the file back atomically, keeping it private.
         Everything else in the file is preserved."""
         data = self._load()
-        section = data.get(name)
-        if not isinstance(section, dict):
-            raise ConfigError(f"{self.path} has no '{name}' section; run `dk meta init`")
-        section.update(changes)
-        temporary = self.path.with_name(self.path.name + ".tmp")
-        descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-        with os.fdopen(descriptor, "w") as handle:
-            json.dump(data, handle, indent=2)
-            handle.write("\n")
-        os.replace(temporary, self.path)  # the old file is never left half-written
+        if not isinstance(data.get(name), dict):
+            raise ConfigError(f"{self.path} has no '{name}' section; run `dk init`")
+        self._file.update({name: {**data[name], **changes}})
 
     def value(self, key: str) -> str:
         return str(self._load().get(key) or "").strip()

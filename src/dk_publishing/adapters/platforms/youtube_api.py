@@ -21,7 +21,7 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaFileUpload
 
-from dk_publishing.adapters.config.platforms import ConfigError
+from dk_publishing.adapters.config.secrets_file import SecretsFile
 from dk_publishing.domain.errors import (
     AuthFailed,
     PublishingError,
@@ -84,29 +84,15 @@ class YouTubeCredentials:
     """client_id, client_secret and the refresh token from one-time consent, in one file kept
     outside the repository. Read fresh on every call."""
 
-    def __init__(self, path: Path) -> None:
-        self.path = path.expanduser()
+    def __init__(self, path: Path | str) -> None:
+        self._file = SecretsFile(path, what="YouTube credentials")
+        self.path = self._file.path
 
     def load(self) -> dict[str, Any]:
-        try:
-            data = json.loads(self.path.read_text())
-        except OSError:
-            raise ConfigError(f"cannot read the YouTube credentials file {self.path}") from None
-        except json.JSONDecodeError as exc:
-            raise ConfigError(f"{self.path} is not valid JSON (line {exc.lineno})") from None
-        if not isinstance(data, dict):
-            raise ConfigError(f"{self.path} must hold a JSON object")
-        return data
+        return self._file.read()
 
     def update(self, changes: Mapping[str, Any]) -> None:
-        data = self.load()
-        data.update(changes)
-        temporary = self.path.with_name(self.path.name + ".tmp")
-        descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-        with os.fdopen(descriptor, "w") as handle:
-            json.dump(data, handle, indent=2)
-            handle.write("\n")
-        os.replace(temporary, self.path)
+        self._file.update(changes)
 
     def google_credentials(self) -> Credentials:
         data = self.load()

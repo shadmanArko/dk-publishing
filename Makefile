@@ -17,7 +17,7 @@ test:  ## pytest with coverage gate
 	uv run pytest --cov --cov-report=term-missing
 check: lint typecheck arch test  ## everything CI runs
 
-.PHONY: db-up db-down migrate dagster-dev seed-rehearsal check-google sheet-init sheet-init-dry meta-init meta-check meta-page-token meta-refresh connect-youtube check-youtube telegram-init telegram-chat telegram-check telegram-test alerts-digest
+.PHONY: db-up db-down migrate dagster-dev seed-rehearsal check-google sheet-init sheet-init-dry meta-init meta-check meta-page-token meta-refresh connect-youtube check-youtube telegram-init telegram-chat telegram-check telegram-test alerts-digest init check-setup
 db-up:  ## start the local dev Postgres (Docker) on :5433
 	docker compose -f compose.dev.yaml up -d --wait
 db-down:  ## stop it (data kept)
@@ -57,3 +57,7 @@ telegram-test:  ## send yourself a test message
 	uv run --env-file .env dk telegram test
 alerts-digest:  ## send today's digest now
 	uv run --env-file .env dk alerts digest
+init:  ## create dk.json, the one file for every id, key and token
+	uv run --env-file .env dk init
+check-setup:  ## test everything in dk.json (posts nothing)
+	uv run --env-file .env dk check-setup

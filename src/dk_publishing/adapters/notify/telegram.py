@@ -16,6 +16,7 @@ from typing import Any
 import httpx
 
 from dk_publishing.adapters.config.platforms import ConfigError
+from dk_publishing.adapters.config.secrets_file import SecretsFile, split_ref
 from dk_publishing.application.ports import NotifyError
 
 API = "https://api.telegram.org"
@@ -25,31 +26,15 @@ TIMEOUT = httpx.Timeout(10.0)
 
 
 class TelegramCredentials:
-    def __init__(self, path: Path) -> None:
-        self.path = path.expanduser()
+    def __init__(self, path: Path | str) -> None:
+        self._file = SecretsFile(path, what="Telegram credentials")
+        self.path = self._file.path
 
     def load(self) -> dict[str, Any]:
-        try:
-            data = json.loads(self.path.read_text())
-        except OSError as exc:
-            raise ConfigError(
-                f"cannot read the Telegram credentials file {self.path}: {exc}"
-            ) from exc
-        except json.JSONDecodeError as exc:
-            raise ConfigError(f"{self.path} is not valid JSON: {exc}") from exc
-        if not isinstance(data, dict):
-            raise ConfigError(f"{self.path} must hold a JSON object")
-        return data
+        return self._file.read()
 
     def update(self, values: Mapping[str, Any]) -> None:
-        data = self.load()
-        data.update(values)
-        tmp = self.path.with_suffix(".tmp")
-        descriptor = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-        with os.fdopen(descriptor, "w") as handle:
-            json.dump(data, handle, indent=2)
-            handle.write("\n")
-        tmp.replace(self.path)
+        self._file.update(values)
 
     def notifier(self, transport: httpx.BaseTransport | None = None) -> TelegramNotifier:
         data = self.load()
@@ -135,6 +120,14 @@ class TelegramNotifier:
         return str(_call(self._token, "getMe", {}, self._transport).get("username") or "?")
 
 
+_STEPS = (
+    "1. In Telegram open @BotFather, send /newbot and follow the questions.\n"
+    "2. Paste the token it gives you into telegram.bot_token in {file}.\n"
+    "3. Open your new bot and send it any message (for example: hi).\n"
+    "4. Run: make telegram-chat"
+)
+
+
 @dataclass
 class SetupResult:
     ok: bool
@@ -142,21 +135,17 @@ class SetupResult:
 
 
 def run_setup(
-    command: str, path: Path, *, transport: httpx.BaseTransport | None = None
+    command: str, path: Path | str, *, transport: httpx.BaseTransport | None = None
 ) -> SetupResult:
     """`init` makes the file, `chat` finds your chat id, `check` tests the bot, `test` messages."""
     credentials = TelegramCredentials(path)
     if command == "init":
-        if write_template(path):
+        if split_ref(path)[1] is not None:
+            return SetupResult(True, [_STEPS.format(file=credentials.path)])
+        if write_template(credentials.path):
             return SetupResult(
                 True,
-                [
-                    f"[did]  created {credentials.path} (owner-only, outside the repo)",
-                    "1. In Telegram open @BotFather, send /newbot and follow the questions.",
-                    "2. Paste the token it gives you into bot_token in that file.",
-                    "3. Open your new bot and send it any message (for example: hi).",
-                    "4. Run: make telegram-chat",
-                ],
+                [f"[did]  created {credentials.path} (owner-only, outside the repo)", _STEPS],
             )
         return SetupResult(True, [f"{credentials.path} already exists; left it alone"])
     data = credentials.load()

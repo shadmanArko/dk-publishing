@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from dk_publishing.adapters.config.platforms import ConfigError
+from dk_publishing.adapters.config.secrets_file import split_ref
 from dk_publishing.adapters.platforms.youtube_api import (
     GoogleYouTubeApi,
     YouTubeCredentials,
@@ -25,7 +26,7 @@ class ConnectResult:
 
 def connect_platform(
     platform: str,
-    path: Path,
+    path: Path | str,
     *,
     check_only: bool = False,
     consent: Callable[[str, str], str] = run_consent,
@@ -39,7 +40,7 @@ def connect_platform(
         )
     credentials = YouTubeCredentials(path)
     lines: list[str] = []
-    if write_template(path):
+    if split_ref(path)[1] is None and write_template(split_ref(path)[0]):
         lines.append(f"[did]  created {credentials.path} (owner-only, outside the repo)")
         lines.append("Paste the OAuth client id and secret into it, then run this again.")
         return ConnectResult(True, lines)
@@ -80,4 +81,4 @@ def connect_from_env(
 ) -> ConnectResult:
     """Where the login file lives comes from the environment; the platform's name stays here."""
     path = env.get("YOUTUBE_CREDENTIALS_FILE", "").strip() or str(DEFAULT_PATH)
-    return connect_platform(platform, Path(path).expanduser(), check_only=check_only)
+    return connect_platform(platform, path, check_only=check_only)

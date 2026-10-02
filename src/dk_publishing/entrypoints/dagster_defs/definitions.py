@@ -31,12 +31,7 @@ from dk_publishing.entrypoints.dagster_defs.sensors import (
 
 
 def default_sheet_sync() -> SheetSyncResource:
-    return SheetSyncResource(
-        database_url=EnvVar("DATABASE_URL"),
-        credentials_path=EnvVar("GOOGLE_APPLICATION_CREDENTIALS"),
-        sheet_id=EnvVar("GOOGLE_SHEET_ID"),
-        folder_id=EnvVar("GOOGLE_DRIVE_FOLDER_ID"),
-    )
+    return SheetSyncResource(database_url=EnvVar("DATABASE_URL"))
 
 
 def build_definitions(

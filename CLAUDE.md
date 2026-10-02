@@ -72,3 +72,10 @@
   `HEARTBEAT_URL` inside its tick (no job per minute); `failed_run_alert` is deduped per job per hour; `daily_digest`
   runs 08:00 Berlin, once per day. No `TELEGRAM_CREDENTIALS_FILE` = alerts silently off. The bot token is part of every
   request URL: never let an httpx exception message out (`telegram._call` swallows it on purpose).
+- **One configuration file** (`dk.json`, `adapters/platforms/dk_file.py`): every id, key and token. Only `DATABASE_URL`
+  and `DK_CONFIG_FILE` are environment. `composition.environment()` = os.environ + dk.json translated to the older env
+  names (explicit env still wins), and both `cli.py` and the Dagster resources must use it, never `os.environ`.
+  Credentials classes take a reference `path#section` (`adapters/config/secrets_file.py`) so a renewed token writes back
+  into its section only. Setup guides are in `docs/setup/`; `make check-setup` and `dk live-test <platform> --yes`
+  (really posts, reads it back) are the proof commands. New platform = a dk.json section, a guide, a check in
+  `setup_check.py`, and a `live_test.py` branch.

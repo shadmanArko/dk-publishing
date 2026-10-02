@@ -1,5 +1,7 @@
 # Runbook: your first real Facebook post
 
+> Superseded for setup by [`docs/setup/meta.md`](../setup/meta.md) and `dk live-test facebook --yes`; kept for the Sheet-driven steps.
+
 Posts made this way are REAL and public on the Page. Delete them by hand afterwards.
 
 1. **Token.** In Meta's Graph API Explorer, pick the new app, request `pages_show_list`,

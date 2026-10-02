@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import os
 import sys
 from collections.abc import Sequence
 from datetime import timedelta
@@ -19,9 +18,24 @@ from dk_publishing.application.use_cases.sync_sheet import sync_sheet
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    try:
+        return _run(argv)
+    except ConfigError as exc:
+        print(f"[FAIL] {exc}", file=sys.stderr)
+        return 2
+
+
+def _env() -> dict[str, str]:
+    """The environment plus dk.json: the one place every id, key and token comes from."""
+    return composition.environment()
+
+
+def _run(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="dk")
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("migrate", help="apply database migrations")
+    commands.add_parser("init", help="create dk.json, the one file for every id, key and token")
+    commands.add_parser("check-setup", help="test everything in dk.json (posts nothing)")
     commands.add_parser(
         "check-google", help="test the Google service account, Sheet and Drive folder"
     )
@@ -53,6 +67,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         choices=["init", "chat", "check", "test"],
         help="init: create file; chat: find chat id; check: test bot; test: message you",
     )
+    live = commands.add_parser(
+        "live-test", help="really publish one small test post and read it back"
+    )
+    live.add_argument("platform")
+    live.add_argument("--text", help="the post text (default: a dated test message)")
+    live.add_argument("--video", type=Path, help="a video file (video-only platforms need one)")
+    live.add_argument("--yes", action="store_true", help="confirm that this posts for real")
     alerts = commands.add_parser("alerts", help="send pending alerts or the digest now")
     alerts.add_argument("what", choices=["pending", "digest"])
     connect = commands.add_parser("connect", help="one-time login setup for a platform")
@@ -77,6 +98,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
+    if args.command == "live-test":
+        return _live_test(args)
+    if args.command == "init":
+        return _init()
+    if args.command == "check-setup":
+        return _check_setup()
     if args.command == "check-google":
         return _check_google()
     if args.command == "sheet":
@@ -92,7 +119,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "meta":
         return _meta(args.meta_command, force=getattr(args, "force", False))
 
-    database_url = os.environ.get("DATABASE_URL", "").strip()
+    database_url = _env().get("DATABASE_URL", "").strip()
     if not database_url:
         print("DATABASE_URL is required and has no default.", file=sys.stderr)
         return 2
@@ -115,7 +142,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 def _check_google() -> int:
     wanted = ("GOOGLE_APPLICATION_CREDENTIALS", "GOOGLE_SHEET_ID", "GOOGLE_DRIVE_FOLDER_ID")
-    values = {name: os.environ.get(name, "").strip() for name in wanted}
+    values = {name: _env().get(name, "").strip() for name in wanted}
     missing = [name for name, value in values.items() if not value]
     if missing:
         print(f"Set in .env: {', '.join(missing)}", file=sys.stderr)
@@ -150,8 +177,8 @@ def _check_google() -> int:
 
 def _sheet_init(*, dry_run: bool) -> int:
     path, sheet_id = (
-        os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", ""),
-        os.environ.get("GOOGLE_SHEET_ID", ""),
+        _env().get("GOOGLE_APPLICATION_CREDENTIALS", ""),
+        _env().get("GOOGLE_SHEET_ID", ""),
     )
     if not path.strip() or not sheet_id.strip():
         print("Set GOOGLE_APPLICATION_CREDENTIALS and GOOGLE_SHEET_ID in .env", file=sys.stderr)
@@ -203,7 +230,7 @@ def _google_env() -> dict[str, str] | None:
         "GOOGLE_SHEET_ID",
         "GOOGLE_DRIVE_FOLDER_ID",
     )
-    values = {name: os.environ.get(name, "").strip() for name in wanted}
+    values = {name: _env().get(name, "").strip() for name in wanted}
     missing = [name for name, value in values.items() if not value]
     if missing:
         print(f"Set in .env: {', '.join(missing)}", file=sys.stderr)
@@ -221,7 +248,7 @@ def _sync(*, allow_cancellations: bool) -> int:
             Path(env["GOOGLE_APPLICATION_CREDENTIALS"]).expanduser(),
             env["GOOGLE_SHEET_ID"],
             env["GOOGLE_DRIVE_FOLDER_ID"],
-            env=os.environ,
+            env=_env(),
         )
         report = sync_sheet(services, allow_cancellations=allow_cancellations)
     except CredentialsError as exc:
@@ -249,7 +276,7 @@ def _sync(*, allow_cancellations: bool) -> int:
 
 
 def _account(args: argparse.Namespace) -> int:
-    database_url = os.environ.get("DATABASE_URL", "").strip()
+    database_url = _env().get("DATABASE_URL", "").strip()
     if not database_url:
         print("DATABASE_URL is required and has no default.", file=sys.stderr)
         return 2
@@ -287,15 +314,15 @@ def _sample() -> int:
 
 
 def _meta(command: str, *, force: bool = False) -> int:
-    path = Path(os.environ.get("META_CREDENTIALS_FILE", "").strip() or meta_default()).expanduser()
+    path = Path(_env().get("META_CREDENTIALS_FILE", "").strip() or meta_default()).expanduser()
     if command == "init":
-        created = composition.meta_init(path, os.environ)
+        created = composition.meta_init(path, _env())
         if not created:
             print(f"{path} already exists; left it alone")
             return 0
         print(f"[did] created {path} (owner-only permissions, outside the repo)")
         print("Open it, paste each token between the quotes, then run: make meta-check")
-        if not os.environ.get("META_CREDENTIALS_FILE", "").strip():
+        if not _env().get("META_CREDENTIALS_FILE", "").strip():
             print(f"Also add this line to .env:  META_CREDENTIALS_FILE={path}")
         return 0
     if command == "refresh":
@@ -333,7 +360,7 @@ def meta_default() -> str:
 
 def _connect(platform: str, *, check_only: bool) -> int:
     try:
-        result = composition.connect_login(platform, os.environ, check_only=check_only)
+        result = composition.connect_login(platform, _env(), check_only=check_only)
     except ConfigError as exc:
         print(f"[FAIL] {exc}", file=sys.stderr)
         return 1
@@ -343,7 +370,7 @@ def _connect(platform: str, *, check_only: bool) -> int:
 
 def _telegram(command: str) -> int:
     try:
-        result = composition.telegram_setup(command, os.environ)
+        result = composition.telegram_setup(command, _env())
     except ConfigError as exc:
         print(f"[FAIL] {exc}", file=sys.stderr)
         return 1
@@ -356,7 +383,7 @@ def _alerts(database_url: str, what: str) -> int:
     from dk_publishing.application.use_cases.alerts import send_alerts, send_digest
 
     try:
-        notifier = composition.build_notifier(os.environ)
+        notifier = composition.build_notifier(_env())
     except ConfigError as exc:
         print(f"[FAIL] {exc}", file=sys.stderr)
         return 1
@@ -366,7 +393,7 @@ def _alerts(database_url: str, what: str) -> int:
     services = composition.build_alert_services(database_url)
     try:
         if what == "digest":
-            sent = send_digest(services, notifier, composition.credential_warnings(os.environ))
+            sent = send_digest(services, notifier, composition.credential_warnings(_env()))
             print("sent the digest" if sent else "today's digest was already sent")
         else:
             report = send_alerts(services, notifier)
@@ -378,3 +405,31 @@ def _alerts(database_url: str, what: str) -> int:
         print(f"[FAIL] {exc}", file=sys.stderr)
         return 1
     return 0
+
+
+def _init() -> int:
+    path, created = composition.init_config(_env())
+    if not created:
+        print(f"{path} already exists; left it alone")
+        return 0
+    print(f"[did] created {path} (owner-only, outside the repo)")
+    print("Fill it in with docs/setup/README.md, then run: make check-setup")
+    if not _env().get("DK_CONFIG_FILE", "").strip():
+        print(f"Also add this line to .env:  DK_CONFIG_FILE={path}")
+    return 0
+
+
+def _check_setup() -> int:
+    report = composition.check_setup_report(_env())
+    print("\n".join(report.lines))
+    if report.problems:
+        print(f"\n{report.problems} problem(s) above need fixing.")
+    return 1 if report.problems else 0
+
+
+def _live_test(args: argparse.Namespace) -> int:
+    result = composition.live_test(
+        args.platform, _env(), text=args.text, video=args.video, confirmed=args.yes
+    )
+    print("\n".join(result.lines))
+    return 0 if result.ok or not args.yes else 1
