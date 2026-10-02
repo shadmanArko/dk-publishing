@@ -32,7 +32,7 @@ SLOT = T0 + timedelta(hours=5)
 
 def build(api: FakeYouTube | None = None) -> tuple[YouTubePublisher, FakeYouTube]:
     api = api or FakeYouTube(uploaded_at=SLOT)
-    return YouTubePublisher(api=api, capabilities=NATIVE_CAPS), api
+    return YouTubePublisher(api=api, capabilities=NATIVE_CAPS, sleep=lambda _: None), api
 
 
 def snap(**more: Any) -> VariantSnapshot:
@@ -580,3 +580,36 @@ def test_live_youtube_without_its_file_stops_start_up(tmp_path: Path) -> None:
             "youtube", settings(), {"YOUTUBE_CREDENTIALS_FILE": str(tmp_path / "nope.json")}
         )
     assert datetime.now(UTC)
+
+
+# --- a fresh upload can be missing from YouTube's list for a while ---------------------------------
+
+
+def lagging(lag: int, naps: list[float]) -> tuple[YouTubePublisher, FakeYouTube]:
+    api = FakeYouTube(uploaded_at=SLOT)
+    api.list_lag = lag
+    return YouTubePublisher(api=api, capabilities=NATIVE_CAPS, sleep=naps.append), api
+
+
+def test_a_fresh_upload_missing_from_the_list_is_found_on_a_later_check(tmp_path: Path) -> None:
+    naps: list[float] = []
+    publisher, api = lagging(0, naps)
+    publisher.publish(publisher.prepare(snap(), video(tmp_path)))
+    api.list_lag = 2  # the next two listings do not show it yet
+    found = publisher.find_live(snap(), None)
+    assert found is not None and found.external_id == "vid1"
+    assert naps == [15.0, 15.0]  # it waited between the checks, and stopped at the first hit
+
+
+def test_a_video_that_really_is_absent_is_only_declared_so_after_waiting(tmp_path: Path) -> None:
+    naps: list[float] = []
+    publisher, _ = lagging(0, naps)
+    assert publisher.find_live(snap(), None) is None
+    assert naps == [15.0, 15.0, 15.0]  # four checks, three waits: about 45 seconds
+
+
+def test_a_video_that_shows_up_at_once_costs_no_waiting(tmp_path: Path) -> None:
+    naps: list[float] = []
+    publisher, _ = lagging(0, naps)
+    publisher.publish(publisher.prepare(snap(), video(tmp_path)))
+    assert publisher.find_live(snap(), None) is not None and naps == []

@@ -12,7 +12,8 @@ published; it simply stays private until the audit is done.
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+import time
+from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -37,13 +38,24 @@ CATEGORIES = {
     "Travel & Events": "19",
 }
 LOOKBACK = timedelta(minutes=15)
+# YouTube's uploads list can lag a fresh upload by up to a minute. Seeing nothing right after an
+# upload does not mean it is not there, and "not there" lets reconcile upload it a second time.
+SETTLE_CHECKS = 4
+SETTLE_WAIT = 15.0  # seconds between checks
 WATCH = "https://www.youtube.com/watch?v="
 
 
 class YouTubePublisher:
-    def __init__(self, *, api: YouTubeApi, capabilities: Capabilities) -> None:
+    def __init__(
+        self,
+        *,
+        api: YouTubeApi,
+        capabilities: Capabilities,
+        sleep: Callable[[float], None] = time.sleep,
+    ) -> None:
         self._api = api
         self._capabilities = capabilities
+        self._sleep = sleep
 
     @property
     def capabilities(self) -> Capabilities:
@@ -168,9 +180,12 @@ class YouTubePublisher:
             return self._scheduled_is_live(str(handle["scheduled_id"]))
         title = str(snapshot.content.get("title") or "").strip()
         since = snapshot.publish_at - LOOKBACK
-        for video in self._api.recent_uploads():
-            if video.title.strip() == title and _when(video.published_at) >= since:
-                return LivePost(video.video_id, WATCH + video.video_id)
+        for check in range(SETTLE_CHECKS):
+            for video in self._api.recent_uploads():
+                if video.title.strip() == title and _when(video.published_at) >= since:
+                    return LivePost(video.video_id, WATCH + video.video_id)
+            if check < SETTLE_CHECKS - 1:
+                self._sleep(SETTLE_WAIT)  # only when nothing matched: a hit returns at once
         return None
 
     def _scheduled_is_live(self, video_id: str) -> LivePost | None:

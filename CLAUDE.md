@@ -79,3 +79,9 @@
   into its section only. Setup guides are in `docs/setup/`; `make check-setup` and `dk live-test <platform> --yes`
   (really posts, reads it back) are the proof commands. New platform = a dk.json section, a guide, a check in
   `setup_check.py`, and a `live_test.py` branch.
+- **YouTube's uploads list lags a fresh upload** (found in the first real test: read-back immediately after upload saw
+  nothing). `find_live` therefore re-checks 4 times, 15 s apart, before saying "not live"; a hit returns at once. Do not
+  shorten this: "not live" makes reconcile upload again. Tests pass `sleep=lambda _: None`.
+- **Instagram reel upload (`rupload`) returned HTTP 500 `ProcessingFailedError` for this app** on every file and header
+  variant (2026-10-02, valid token and scopes); container creation worked. Planned workaround: `video_url` from the public
+  media link once the server has one.

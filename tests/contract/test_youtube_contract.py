@@ -20,7 +20,7 @@ class TestYouTube(PublisherContract):
 
     @pytest.fixture
     def publisher(self) -> Publisher:
-        return YouTubePublisher(api=FakeYouTube(), capabilities=CAPS)
+        return YouTubePublisher(api=FakeYouTube(), capabilities=CAPS, sleep=lambda _: None)
 
     @pytest.fixture
     def media(self, tmp_path: Path) -> Sequence[Rendition]:

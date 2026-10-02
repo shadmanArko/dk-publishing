@@ -22,6 +22,7 @@ class FakeYouTube:
         self.calls: list[str] = []
         self.fail_next: PublishingError | None = None
         self.lose_response_next = False
+        self.list_lag = 0  # the next N listings hide the newest upload, as YouTube really does
         self._n = 0
 
     def _maybe_fail(self) -> None:
@@ -76,7 +77,11 @@ class FakeYouTube:
     def recent_uploads(self, limit: int = 25) -> list[VideoInfo]:
         self.calls.append("recent_uploads")
         self._maybe_fail()
-        return [self._info(v, self.now) for v in reversed(list(self.videos))][:limit]
+        ids = list(self.videos)
+        if self.list_lag > 0:
+            self.list_lag -= 1
+            ids = ids[:-1]
+        return [self._info(v, self.now) for v in reversed(ids)][:limit]
 
     def delete(self, video_id: str) -> None:
         self.calls.append("delete")
