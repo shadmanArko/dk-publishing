@@ -397,3 +397,23 @@ def test_a_failed_run_alerts_once_and_never_crashes_the_sensor(conninfo: str, se
     sensor(context)
     assert len(telegram.sent) == 1 and "9 cancellations" in telegram.sent[0]
     assert "exploding" in telegram.sent[0]
+
+
+class HalfConfiguredNotify(FakeNotify):
+    def notifier(self) -> FakeNotifier | None:
+        raise ConfigError("dk.json needs bot_token and chat_id")
+
+
+def test_half_filled_telegram_settings_are_reported_not_raised(conninfo: str, seed: Seed) -> None:
+    rig = Rig(conninfo, seed)
+    definitions, _, _ = alert_wiring(rig)
+    notify = HalfConfiguredNotify(database_url=rig.conninfo)
+
+    sensor = definitions.get_sensor_def("notifications")
+    result = list(sensor(build_sensor_context(resources={"notify": notify})))  # type: ignore[arg-type]
+    assert "set up incompletely" in str(result[0].skip_message)
+
+    digest = definitions.get_job_def("daily_digest").execute_in_process(
+        instance=DagsterInstance.ephemeral(), resources={"notify": notify}
+    )
+    assert digest.success

@@ -12,6 +12,7 @@ from dagster import (
     sensor,
 )
 
+from dk_publishing.adapters.config.platforms import ConfigError
 from dk_publishing.application.ports import DueAction, NotifyError
 from dk_publishing.application.use_cases.alerts import send_alerts, send_run_failure
 from dk_publishing.domain.planning import Action
@@ -104,7 +105,11 @@ def notifications(context: SensorEvaluationContext, notify: NotifyResource) -> I
     alive = notify.heartbeat()
     if alive is False:
         context.log.warning("the heartbeat URL did not answer")
-    notifier = notify.notifier()
+    try:
+        notifier = notify.notifier()
+    except ConfigError as exc:  # half-filled credentials must not break the scheduler
+        yield SkipReason(f"Telegram is set up incompletely: {exc}")
+        return
     if notifier is None:
         yield SkipReason("Telegram is not configured")
         return
@@ -118,7 +123,11 @@ def notifications(context: SensorEvaluationContext, notify: NotifyResource) -> I
 def failed_run_alert(context: RunFailureSensorContext, notify: NotifyResource) -> None:
     """A halted sync or a crashed job tells a person; the next failure of the same job within the
     hour is not repeated."""
-    notifier = notify.notifier()
+    try:
+        notifier = notify.notifier()
+    except ConfigError as exc:
+        context.log.warning(f"could not send the failure alert, Telegram is incomplete: {exc}")
+        return
     if notifier is None:
         return
     run = context.dagster_run

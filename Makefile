@@ -25,8 +25,8 @@ db-down:  ## stop it (data kept)
 migrate:  ## apply migrations to $$DATABASE_URL
 	uv run --env-file .env dk migrate
 dagster-dev:  ## Dagster UI + daemon on :3000 (dry-run); needs DATABASE_URL
-	mkdir -p $(DAGSTER_HOME) && cp dagster/dagster.dev.yaml $(DAGSTER_HOME)/dagster.yaml
-	DAGSTER_HOME=$(DAGSTER_HOME) uv run dagster dev -w dagster/workspace.yaml
+	mkdir -p "$(DAGSTER_HOME)" && cp dagster/dagster.dev.yaml "$(DAGSTER_HOME)/dagster.yaml"
+	DAGSTER_HOME="$(DAGSTER_HOME)" uv run dagster dev -w dagster/workspace.yaml
 seed-rehearsal:  ## create approved dry-run posts a few minutes out
 	uv run --env-file .env dk seed-rehearsal
 check-google:  ## test the Google service account, Sheet and Drive folder

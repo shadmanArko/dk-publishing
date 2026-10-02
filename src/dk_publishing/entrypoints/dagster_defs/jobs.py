@@ -4,6 +4,7 @@ from collections.abc import Callable
 
 from dagster import Config, Failure, JobDefinition, OpExecutionContext, job, op
 
+from dk_publishing.adapters.config.platforms import ConfigError
 from dk_publishing.application.services import Services
 from dk_publishing.application.use_cases.alerts import send_digest
 from dk_publishing.application.use_cases.dispatch import expire_variant
@@ -90,7 +91,11 @@ def sync_sheet_job() -> None:
 
 @op
 def daily_digest_op(context: OpExecutionContext, notify: NotifyResource) -> None:
-    notifier = notify.notifier()
+    try:
+        notifier = notify.notifier()
+    except ConfigError as exc:
+        context.log.warning(f"no digest sent, Telegram is incomplete: {exc}")
+        return
     if notifier is None:
         context.log.info("Telegram is not configured; no digest sent")
         return
