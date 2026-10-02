@@ -47,7 +47,8 @@ PY
 fi
 
 echo "==> start"
-ssh "$HOST" bash -s "$DOMAIN" "$SHARED" "$ACCOUNT_NAME" <<'REMOTE_SCRIPT'
+# printf %q keeps arguments with spaces intact when ssh joins them into one command line
+ssh "$HOST" "bash -s $(printf '%q ' "$DOMAIN" "$SHARED" "$ACCOUNT_NAME")" <<'REMOTE_SCRIPT'
 set -euo pipefail
 cd /srv/dk/app/deploy
 [ -s /srv/dk/secrets/dk.json ] || { echo "no /srv/dk/secrets/dk.json yet: re-run with --secrets"; exit 1; }
