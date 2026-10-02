@@ -15,6 +15,7 @@ Sheet and in `dk.json`.
 | A YouTube channel | video posts | [YouTube](docs/setup/youtube.md) |
 | A Telegram account | alerts and the 08:00 digest (optional) | [Telegram](docs/setup/telegram.md) |
 | TikTok, LinkedIn, X, Reddit | not supported yet | [Status](docs/setup/other-platforms.md) |
+| A server (for production) | runs it all day, serves media links | [Deploy](docs/setup/deploy.md) |
 
 Use only the platforms you want. Anything left empty is skipped.
 
@@ -50,6 +51,11 @@ uv run --env-file .env dk live-test threads --yes
 uv run --env-file .env dk live-test instagram --video clip.mp4 --yes
 uv run --env-file .env dk live-test youtube --video clip.mp4 --yes
 ```
+
+## Run it on a server
+
+`deploy/deploy.sh root@SERVER media.yourbusiness.com --secrets` after a one-time `deploy/bootstrap.sh`.
+Steps and what runs by itself: [docs/setup/deploy.md](docs/setup/deploy.md).
 
 ## Everyday use
 

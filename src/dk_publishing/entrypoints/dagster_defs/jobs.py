@@ -60,6 +60,9 @@ def housekeeping_op(context: OpExecutionContext, services: ServicesResource) -> 
         context.log.warning(f"runs died while scheduling; check the platform for copies: {stuck}")
     if uncertain:
         context.log.warning(f"runs died mid-publish, now being reconciled: {uncertain}")
+    purged = services.purge_public_media()
+    if purged:
+        context.log.info(f"removed {purged} public media link(s) nobody revoked")
     context.log.info(f"housekeeping: {len(uncertain)} uncertain, {len(reprepared)} re-prepared")
 
 
@@ -106,3 +109,19 @@ def daily_digest_op(context: OpExecutionContext, notify: NotifyResource) -> None
 @job
 def daily_digest() -> None:
     daily_digest_op()
+
+
+@op
+def renew_tokens_op(context: OpExecutionContext, services: ServicesResource) -> None:
+    result = services.renew_tokens()
+    if result is None:
+        context.log.info("no renewable token is configured; nothing to do")
+    elif not result[0]:
+        raise Failure(description=f"could not renew a token: {result[1]}")
+    else:
+        context.log.info(result[1])
+
+
+@job
+def renew_tokens() -> None:
+    renew_tokens_op()

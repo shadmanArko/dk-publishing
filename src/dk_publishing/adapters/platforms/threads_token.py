@@ -8,7 +8,7 @@ from datetime import UTC, datetime, timedelta
 
 import httpx
 
-from dk_publishing.adapters.config.platforms import PlatformSettings
+from dk_publishing.adapters.config.platforms import ConfigError, PlatformSettings
 from dk_publishing.adapters.platforms.meta import GraphClient
 from dk_publishing.adapters.platforms.meta_credentials import MetaCredentials, SectionTokenProvider
 from dk_publishing.adapters.platforms.threads import DEFAULT_VERSION, HOST
@@ -76,6 +76,14 @@ def refresh_threads_token(
     )
     days = seconds // 86400
     return RefreshResult(True, True, f"the Threads token was renewed and is good for {days} days")
+
+
+def has_renewable_token(credentials: MetaCredentials) -> bool:
+    """Is there a token in the file that expires and can be renewed?"""
+    try:
+        return bool(str(credentials.section("threads").get("access_token") or "").strip())
+    except ConfigError:
+        return False
 
 
 def days_left(credentials: MetaCredentials, now: datetime | None = None) -> int | None:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from collections.abc import Sequence
 from datetime import timedelta
@@ -408,13 +409,14 @@ def _alerts(database_url: str, what: str) -> int:
 
 
 def _init() -> int:
-    path, created = composition.init_config(_env())
+    # The raw environment, not _env(): the file this creates may be the one DK_CONFIG_FILE names.
+    path, created = composition.init_config(os.environ)
     if not created:
         print(f"{path} already exists; left it alone")
         return 0
     print(f"[did] created {path} (owner-only, outside the repo)")
     print("Fill it in following README.md, then run: make check-setup")
-    if not _env().get("DK_CONFIG_FILE", "").strip():
+    if not os.environ.get("DK_CONFIG_FILE", "").strip():
         print(f"Also add this line to .env:  DK_CONFIG_FILE={path}")
     return 0
 

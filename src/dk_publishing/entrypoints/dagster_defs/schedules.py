@@ -1,6 +1,11 @@
 from dagster import DefaultScheduleStatus, ScheduleDefinition
 
-from dk_publishing.entrypoints.dagster_defs.jobs import daily_digest, housekeeping, sync_sheet_job
+from dk_publishing.entrypoints.dagster_defs.jobs import (
+    daily_digest,
+    housekeeping,
+    renew_tokens,
+    sync_sheet_job,
+)
 
 # Berlin time, so daylight saving never shifts a schedule.
 housekeeping_schedule = ScheduleDefinition(
@@ -26,6 +31,16 @@ daily_digest_schedule = ScheduleDefinition(
     name="daily_digest",
     job=daily_digest,
     cron_schedule="0 8 * * *",
+    execution_timezone="Europe/Berlin",
+    default_status=DefaultScheduleStatus.RUNNING,
+)
+
+# Tokens that expire are renewed once a week at night; the renewal itself skips a token that was
+# refreshed recently, so running it daily is harmless and a failed night is retried the next.
+token_renewal_schedule = ScheduleDefinition(
+    name="token_renewal",
+    job=renew_tokens,
+    cron_schedule="30 3 * * *",
     execution_timezone="Europe/Berlin",
     default_status=DefaultScheduleStatus.RUNNING,
 )

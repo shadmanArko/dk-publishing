@@ -1,0 +1,13 @@
+.git
+.venv
+.env
+.dagster_home
+.media
+.mypy_cache
+.ruff_cache
+.pytest_cache
+__pycache__
+tests
+docs
+*.pdf
+deploy

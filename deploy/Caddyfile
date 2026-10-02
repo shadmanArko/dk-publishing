@@ -1,0 +1,14 @@
+# Serves ONLY the temporary media links (Instagram and Threads fetch their files from here).
+# Every link is an unguessable token folder that the app removes after use. There is no
+# directory listing, and nothing else is reachable: the Dagster UI is not published at all.
+{$MEDIA_SITE} {
+	root * /srv/public
+	@file path_regexp ^/[A-Za-z0-9_-]{20,}/[^/]+$
+	handle @file {
+		header Cache-Control "no-store"
+		file_server
+	}
+	handle {
+		respond "Not found" 404
+	}
+}

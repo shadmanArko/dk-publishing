@@ -9,6 +9,7 @@ from dk_publishing.entrypoints.dagster_defs.jobs import (
     prepare_variant_job,
     publish_variant_job,
     reconcile_variant_job,
+    renew_tokens,
     schedule_native_job,
     sync_sheet_job,
 )
@@ -21,6 +22,7 @@ from dk_publishing.entrypoints.dagster_defs.schedules import (
     daily_digest_schedule,
     housekeeping_schedule,
     sheet_sync_fallback,
+    token_renewal_schedule,
 )
 from dk_publishing.entrypoints.dagster_defs.sensors import (
     due_actions,
@@ -47,9 +49,15 @@ def build_definitions(
             housekeeping,
             sync_sheet_job,
             daily_digest,
+            renew_tokens,
         ],
         sensors=[due_actions, sheet_changed, notifications, failed_run_alert],
-        schedules=[housekeeping_schedule, sheet_sync_fallback, daily_digest_schedule],
+        schedules=[
+            housekeeping_schedule,
+            sheet_sync_fallback,
+            daily_digest_schedule,
+            token_renewal_schedule,
+        ],
         resources={
             "services": services,
             "sheet_sync": sheet_sync or default_sheet_sync(),

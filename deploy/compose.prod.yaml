@@ -1,0 +1,93 @@
+# The production stack. Everything runs from one image; only Caddy is reachable from outside.
+# Start it with deploy/deploy.sh (it fills in the environment file for you).
+x-app: &app
+  image: dk-publishing:latest
+  restart: unless-stopped
+  environment: &app-env
+    DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/dk_publishing
+    DAGSTER_DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/dagster
+    DK_CONFIG_FILE: /etc/dk-publishing/dk.json
+    TZ: Europe/Berlin
+  volumes:
+    - ${DK_SECRETS_DIR:-/srv/dk/secrets}:/etc/dk-publishing   # dk.json + the Google key; tokens renew in place
+    - media:/srv/media
+    - public:/srv/public
+    - ${DK_PLATFORMS_FILE:-./platforms.production.yaml}:/app/config/platforms.yaml:ro
+    - ../dagster/dagster.prod.yaml:/dagster_home/dagster.yaml:ro
+  depends_on:
+    migrate:
+      condition: service_completed_successfully
+
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: dk_publishing
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./postgres-init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      retries: 20
+
+  migrate:
+    <<: *app
+    build: ..            # the one place the image is built; the others reuse it
+    restart: "no"
+    command: ["dk", "migrate"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  daemon:
+    <<: *app
+    command: ["dagster-daemon", "run", "-w", "/app/dagster/workspace.yaml"]
+
+  webserver:
+    <<: *app
+    command: ["dagster-webserver", "-h", "0.0.0.0", "-p", "3000", "-w", "/app/dagster/workspace.yaml"]
+    ports:
+      - "127.0.0.1:${DK_UI_PORT:-3000}:3000"   # reachable only from the server itself: use an SSH tunnel to look at it
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    environment:
+      MEDIA_SITE: ${MEDIA_SITE}
+    ports:
+      - "${DK_HTTP_PORT:-80}:80"
+      - "${DK_HTTPS_PORT:-443}:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - public:/srv/public:ro
+      - media:/srv/media:ro        # the public links are shortcuts into here
+      - caddy_data:/data
+
+  backup:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - ${DK_BACKUP_DIR:-/srv/dk/backups}:/backups
+    depends_on:
+      postgres:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        while true; do
+          f=/backups/dk-$$(date +%Y%m%d-%H%M).sql.gz
+          pg_dump -h postgres -U postgres dk_publishing | gzip > $$f && echo "backup $$f"
+          find /backups -name 'dk-*.sql.gz' -mtime +14 -delete
+          sleep 86400
+        done
+
+volumes:
+  pgdata:
+  media:
+  public:
+  caddy_data:

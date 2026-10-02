@@ -15,6 +15,14 @@ class ServicesResource(ConfigurableResource):  # type: ignore[type-arg]
     database_url: str
     platforms_config: str = str(composition.DEFAULT_PLATFORMS_CONFIG)
 
+    def renew_tokens(self) -> tuple[bool, str] | None:
+        """(succeeded, message), or None when there is no renewable token to renew."""
+        result = composition.renew_tokens(composition.environment())
+        return None if result is None else (result.ok, result.message)
+
+    def purge_public_media(self) -> int:
+        return composition.purge_public_media(composition.environment())
+
     def services(self) -> Services:
         return composition.build_services(
             self.database_url, Path(self.platforms_config), env=composition.environment()

@@ -85,3 +85,9 @@
 - **Instagram reel upload (`rupload`) returned HTTP 500 `ProcessingFailedError` for this app** on every file and header
   variant (2026-10-02, valid token and scopes); container creation worked. Planned workaround: `video_url` from the public
   media link once the server has one.
+- **Production stack** (`Dockerfile`, `deploy/`): one image for migrate/daemon/webserver; Caddy serves only
+  token-shaped paths from the `public` volume (and mounts `media` read-only because the links are symlinks into it);
+  the Dagster UI listens on 127.0.0.1 only (SSH tunnel). `deploy/platforms.production.yaml` is mounted over
+  `config/platforms.yaml`, and the shipped config stays dry-run. Secrets dir `/srv/dk/secrets` is owned by uid 10001
+  and must stay writable (tokens renew in place). Only ONE compose service may carry `build:` (migrate), or parallel
+  builds collide on the image name. Nightly `renew_tokens` and the 5-minute public-link sweep are what keep it unattended.

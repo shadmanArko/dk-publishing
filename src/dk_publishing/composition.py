@@ -16,6 +16,7 @@ from dk_publishing.adapters.config.secrets_file import split_ref
 from dk_publishing.adapters.config.sheet_layout import load_sheet_layout
 from dk_publishing.adapters.media.drive_catalog import DriveCatalog, sheet_modified_time
 from dk_publishing.adapters.media.drive_store import DriveMediaStore, GoogleDriveDownloader
+from dk_publishing.adapters.media.public import PublicMediaStore
 from dk_publishing.adapters.notify.telegram import (
     DEFAULT_PATH as DEFAULT_TELEGRAM_PATH,
 )
@@ -52,6 +53,7 @@ from dk_publishing.adapters.platforms.setup_check import SetupReport, check_setu
 from dk_publishing.adapters.platforms.threads_token import (
     RefreshResult,
     expiry_warnings,
+    has_renewable_token,
     refresh_expiring_tokens,
 )
 from dk_publishing.adapters.sheets.gateway import GoogleSheetGateway
@@ -417,3 +419,22 @@ def live_test(
     if settings is None:
         raise ConfigError(f"{platform!r} is not in config/platforms.yaml")
     return run_live_test(platform, env, settings, text=text, video=video, confirmed=confirmed)
+
+
+def renew_tokens(env: Mapping[str, str]) -> RefreshResult | None:
+    """Renew the tokens that expire. None when there is nothing to renew (no Meta credentials,
+    or no renewable token filled in), so a business without them is never alerted."""
+    ref = env.get("META_CREDENTIALS_FILE", "").strip()
+    if not ref or not split_ref(ref)[0].exists():
+        return None
+    if not has_renewable_token(MetaCredentials(ref)):
+        return None
+    return meta_refresh(ref)
+
+
+def purge_public_media(env: Mapping[str, str], older_than: timedelta = timedelta(hours=6)) -> int:
+    """Remove public links nobody revoked (a run that died). 0 when none are configured."""
+    directory, base = env.get("PUBLIC_MEDIA_DIR", "").strip(), env.get("PUBLIC_MEDIA_BASE_URL", "")
+    if not directory or not base.strip():
+        return 0
+    return PublicMediaStore(Path(directory).expanduser(), base).purge_older_than(older_than)

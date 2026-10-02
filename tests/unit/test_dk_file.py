@@ -172,3 +172,15 @@ def test_init_config_creates_once_and_names_the_path(tmp_path: Path) -> None:
     target = tmp_path / "x" / "dk.json"
     assert composition.init_config({"DK_CONFIG_FILE": str(target)}) == (target, True)
     assert composition.init_config({"DK_CONFIG_FILE": str(target)}) == (target, False)
+
+
+def test_init_works_when_dk_config_file_already_names_the_missing_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from dk_publishing.entrypoints.cli import main
+
+    target = tmp_path / "new" / "dk.json"
+    monkeypatch.setenv("DK_CONFIG_FILE", str(target))
+    assert main(["init"]) == 0 and target.exists()
+    assert "created" in capsys.readouterr().out
+    assert main(["init"]) == 0 and "already exists" in capsys.readouterr().out
