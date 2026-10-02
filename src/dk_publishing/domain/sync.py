@@ -209,11 +209,7 @@ def row_status(
     status = variant_status.value
     if variant_status is S.PUBLISHED:
         if (external_id or "").startswith(ASSISTED_PREFIX):
-            return (
-                SENT_TO_YOU,
-                "",
-                "Post it yourself in the app. The details were sent on Telegram.",
-            )
+            return SENT_TO_YOU, "", ""  # the status says it all; the details are on Telegram
         return status, external_url or "", LIVE_EDIT_NOTE if edited_while_live else ""
     if variant_status in (S.DRAFT, S.INVALID):
         return status, "", join_problems(problems)

@@ -176,9 +176,7 @@ def test_the_sheet_says_sent_to_you_instead_of_published() -> None:
         external_id=f"{ASSISTED_PREFIX}v1",
         **kwargs,
     )
-    assert (
-        assisted_row[0] == SENT_TO_YOU and assisted_row[1] == "" and "Telegram" in assisted_row[2]
-    )
+    assert assisted_row == (SENT_TO_YOU, "", "")  # not an error, so nothing in last_error
     real = row_status(
         variant_status=VariantStatus.PUBLISHED,
         external_url="https://x/1",
