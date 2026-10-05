@@ -26,3 +26,12 @@ already asks for the per-post choices TikTok requires.
 
 Any platform can be made assisted by adding rules (see `adapters/platforms/tiktok.py`) and a branch in
 `assisted_build.py`; LinkedIn is the next candidate.
+
+## Addendum: direct posting is built for the sandbox application
+
+`adapters/platforms/tiktok_direct.py` and `tiktok_api.py` implement Login Kit sign-in
+(`dk connect tiktok`) and Direct Post (creator info, init, chunked upload, status), so TikTok's
+required sandbox demonstration can be recorded. `mode: live` selects it, `mode: assisted` stays the
+default. Before the upload starts, the publish id is written to `alerts_sent`
+(`tiktok:<tenant>:<variant>:<publish_id>`); `find_live` asks TikTok about those ids, and "no id" means
+nothing was started. Tokens (24 h access, 365 d refresh) are renewed into `dk.json`.

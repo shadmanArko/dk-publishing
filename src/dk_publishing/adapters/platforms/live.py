@@ -20,6 +20,12 @@ from dk_publishing.adapters.platforms.meta_credentials import MetaCredentials, S
 from dk_publishing.adapters.platforms.threads import DEFAULT_VERSION as THREADS_VERSION
 from dk_publishing.adapters.platforms.threads import HOST as THREADS_HOST
 from dk_publishing.adapters.platforms.threads import ThreadsPublisher
+from dk_publishing.adapters.platforms.tiktok_api import (
+    HttpTikTokApi,
+    TikTokCredentials,
+    TikTokTokens,
+)
+from dk_publishing.adapters.platforms.tiktok_direct import PublishLog, TikTokDirectPublisher
 from dk_publishing.adapters.platforms.tokens import FileTokenProvider
 from dk_publishing.adapters.platforms.youtube import YouTubePublisher
 from dk_publishing.adapters.platforms.youtube_api import GoogleYouTubeApi, YouTubeCredentials
@@ -34,6 +40,7 @@ def build_live_publisher(
     settings: PlatformSettings,
     env: Mapping[str, str],
     transport: httpx.BaseTransport | None = None,
+    log: PublishLog | None = None,
 ) -> Publisher:
     caps = settings.capabilities  # each row's `delivery` choice decides whether the window is used
     if name == "facebook":
@@ -76,6 +83,8 @@ def build_live_publisher(
         return _instagram(settings, caps, env, transport)
     if name == "youtube":
         return _youtube(caps, env)
+    if name == "tiktok":
+        return _tiktok(caps, env, transport, log)
     raise ConfigError(f"platform {name!r} is live but no such adapter is built yet")
 
 
@@ -148,3 +157,22 @@ def _youtube(caps: Capabilities, env: Mapping[str, str]) -> Publisher:
     credentials = YouTubeCredentials(path)
     credentials.load()  # fail at start-up if the file is missing or broken; tokens are read later
     return YouTubePublisher(api=GoogleYouTubeApi.from_credentials(credentials), capabilities=caps)
+
+
+def _tiktok(
+    caps: Capabilities,
+    env: Mapping[str, str],
+    transport: httpx.BaseTransport | None,
+    log: PublishLog | None,
+) -> Publisher:
+    ref = env.get("TIKTOK_CREDENTIALS_FILE", "").strip()
+    if not ref:
+        raise ConfigError(
+            "tiktok is live but there is no tiktok section in dk.json (run `make init`)"
+        )
+    if log is None:
+        raise ConfigError("tiktok needs the database to remember which posts it started")
+    credentials = TikTokCredentials(ref)
+    credentials.load()  # fail at start-up if the file is missing or broken; tokens are read later
+    api = HttpTikTokApi(TikTokTokens(credentials, transport), transport)
+    return TikTokDirectPublisher(api=api, capabilities=caps, log=log)

@@ -114,7 +114,9 @@ def build_services(
         if settings.mode is Mode.OFF:
             continue
         if settings.mode is Mode.LIVE:
-            publishers[name] = build_live_publisher(name, settings, env, transport)
+            publishers[name] = build_live_publisher(
+                name, settings, env, transport, PostgresSentLog(database_url)
+            )
             live = True
         elif settings.mode is Mode.ASSISTED:
             notifier = build_notifier(env, transport)

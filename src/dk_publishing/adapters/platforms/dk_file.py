@@ -62,6 +62,9 @@ TEMPLATE: dict[str, Any] = {
         "handle": "",
         "client_key": "",
         "client_secret": "",
+        "redirect_uri": "",
+        "access_token": "",
+        "refresh_token": "",
     },
     "alerts": {
         "_help": "Optional dead-man's switch: a Healthchecks.io-style ping URL",
@@ -91,6 +94,7 @@ _SECTIONS = {
     "meta": "META_CREDENTIALS_FILE",
     "youtube": "YOUTUBE_CREDENTIALS_FILE",
     "telegram": "TELEGRAM_CREDENTIALS_FILE",
+    "tiktok": "TIKTOK_CREDENTIALS_FILE",
 }
 
 

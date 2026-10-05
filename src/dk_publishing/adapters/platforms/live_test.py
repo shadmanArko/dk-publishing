@@ -22,8 +22,8 @@ from dk_publishing.adapters.platforms.live import build_live_publisher
 from dk_publishing.domain.errors import PublishingError
 from dk_publishing.domain.publishing import Rendition, VariantSnapshot
 
-SUPPORTED = ("facebook", "threads", "instagram", "youtube")
-NEEDS_VIDEO = ("instagram", "youtube")
+SUPPORTED = ("facebook", "threads", "instagram", "youtube", "tiktok")
+NEEDS_VIDEO = ("instagram", "youtube", "tiktok")
 
 
 @dataclass
@@ -42,6 +42,9 @@ def _content(platform: str, text: str, video: Path | None) -> dict[str, Any]:
             "made_for_kids": "no",
             "media": media,
         }
+    if platform == "tiktok":
+        # Always private: an unaudited TikTok app may only post "only me".
+        return {"caption": text, "privacy_level": "only_me", "allow_comments": True, "media": media}
     if platform == "instagram":
         return {"format": "reel", "caption": text, "media": media}
     if platform == "threads":
@@ -77,7 +80,11 @@ def run_live_test(
     text = text or f"DK Publishing test post ({stamp}). Safe to delete."
     content = _content(platform, text, video)
     result = LiveTestResult(ok=False)
-    what = f"a {content.get('format', 'video')}" if platform != "youtube" else "a PRIVATE video"
+    what = (
+        "a PRIVATE video"
+        if platform in ("youtube", "tiktok")
+        else f"a {content.get('format', 'video')}"
+    )
     result.lines.append(f"{platform}: will publish {what}: {text[:80]!r}")
     if not confirmed:
         result.lines.append("Nothing was posted. Add --yes to really publish it.")

@@ -17,7 +17,7 @@ test:  ## pytest with coverage gate
 	uv run pytest --cov --cov-report=term-missing
 check: lint typecheck arch test  ## everything CI runs
 
-.PHONY: db-up db-down migrate dagster-dev seed-rehearsal check-google sheet-init sheet-init-dry meta-init meta-check meta-page-token meta-refresh connect-youtube check-youtube telegram-init telegram-chat telegram-check telegram-test alerts-digest init check-setup deploy deploy-secrets
+.PHONY: db-up db-down migrate dagster-dev seed-rehearsal check-google sheet-init sheet-init-dry meta-init meta-check meta-page-token meta-refresh connect-youtube check-youtube connect-tiktok check-tiktok telegram-init telegram-chat telegram-check telegram-test alerts-digest init check-setup deploy deploy-secrets
 db-up:  ## start the local dev Postgres (Docker) on :5433
 	docker compose -f compose.dev.yaml up -d --wait
 db-down:  ## stop it (data kept)
@@ -65,3 +65,7 @@ deploy:  ## ship the code to the server (details from deploy/server.conf)
 	deploy/deploy.sh
 deploy-secrets:  ## ship the code AND your dk.json + Google key (after changing a token or key)
 	deploy/deploy.sh --secrets
+connect-tiktok:  ## one-time TikTok sign-in (opens your browser)
+	uv run --env-file .env dk connect tiktok
+check-tiktok:  ## test the saved TikTok sign-in
+	uv run --env-file .env dk connect tiktok --check

@@ -83,8 +83,8 @@ def test_platforms_that_need_a_video_say_so_and_unknown_ones_are_refused(
         run_live_test("instagram", env, PLATFORMS["instagram"])
     with pytest.raises(ConfigError, match="no such video file"):
         run_live_test("youtube", env, PLATFORMS["youtube"], video=tmp_path / "none.mp4")
-    with pytest.raises(ConfigError, match="no live test for 'tiktok'"):
-        run_live_test("tiktok", env, PLATFORMS["tiktok"])
+    with pytest.raises(ConfigError, match="no live test for 'linkedin'"):
+        run_live_test("linkedin", env, PLATFORMS["linkedin"])
 
 
 def test_youtube_is_always_tested_as_a_private_video(env: dict[str, str], tmp_path: Path) -> None:

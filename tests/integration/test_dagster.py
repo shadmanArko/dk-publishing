@@ -227,7 +227,7 @@ def test_build_services_wires_only_platforms_that_are_on(conninfo: str, dry_conf
 
 def test_a_platform_without_an_adapter_stops_start_up(tmp_path: Path, conninfo: str) -> None:
     config = tmp_path / "platforms.yaml"
-    config.write_text("platforms:\n  tiktok: {mode: live}\n")
+    config.write_text("platforms:\n  linkedin: {mode: live}\n")
     with pytest.raises(ConfigError, match="no such adapter is built yet"):
         composition.build_services(conninfo, config)
 

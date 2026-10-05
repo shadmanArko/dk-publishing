@@ -61,7 +61,7 @@ def check_setup(env: Mapping[str, str], platforms: Mapping[str, PlatformSettings
     _meta(report, env, data, platforms)
     _youtube(report, env, data)
     _telegram(report, env, data)
-    _tiktok(report, data, platforms)
+    _tiktok(report, env, data, platforms)
     _media(report, data)
     return report
 
@@ -136,7 +136,10 @@ def _telegram(report: SetupReport, env: Mapping[str, str], data: dict[str, Any])
 
 
 def _tiktok(
-    report: SetupReport, data: dict[str, Any], platforms: Mapping[str, PlatformSettings]
+    report: SetupReport,
+    env: Mapping[str, str],
+    data: dict[str, Any],
+    platforms: Mapping[str, PlatformSettings],
 ) -> None:
     assisted = sorted(n for n, p in platforms.items() if p.mode is Mode.ASSISTED)
     if assisted and not _filled(data.get("telegram")):
@@ -144,8 +147,16 @@ def _tiktok(
             f"{', '.join(assisted)} hands posts to you on Telegram, but Telegram is not set up "
             "(docs/setup/telegram.md)"
         )
-    if _filled(data.get("tiktok")):
-        report.ok("tiktok: filled in (posts are handed to you on Telegram; docs/setup/tiktok.md)")
+    section = data.get("tiktok") or {}
+    if str(section.get("refresh_token") or "").strip() and "tiktok" in {
+        n for n, p in platforms.items() if p.mode is Mode.LIVE
+    }:
+        result = connect_from_env("tiktok", env, check_only=True)
+        report.lines.extend(result.lines)
+        if not result.ok:
+            report.problems += 1
+    elif _filled(data.get("tiktok")):
+        report.ok("tiktok: filled in (assisted: posts go to you on Telegram; docs/setup/tiktok.md)")
     else:
         report.skip("tiktok: nothing filled in (docs/setup/tiktok.md)")
 

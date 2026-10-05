@@ -103,3 +103,7 @@
   shows "sent to you" (`domain/sync.row_status`). `Notifier` has `send_video`; `SentLog` (alerts_sent) makes the card
   once-only and answers `find_live`. Assisted needs Telegram: build_services and check-setup refuse it without. TikTok
   direct posting is NOT built: TikTok bans "private or personal use" apps, so expect no approval.
+- **TikTok direct post** (`tiktok_api.py`, `tiktok_direct.py`, ADR 0019 addendum): `mode: live` = Content Posting API,
+  `mode: assisted` = Telegram hand-over. Built only to pass TikTok's sandbox review; an unaudited app posts "only me".
+  The publish id is recorded BEFORE the upload (the duplicate guard); never move it after. Tokens live in `dk.json` `tiktok`
+  and renew themselves. The review text is `docs/setup/tiktok-review-text.md`.

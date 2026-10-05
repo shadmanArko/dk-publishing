@@ -7,9 +7,9 @@ from typing import Any
 
 import httpx
 import pytest
-from tests.contract.test_tiktok_contract import MemoryLog
 from tests.support import CAPS, T0
 from tests.support.fake_telegram import FakeNotifier
+from tests.support.fake_tiktok import MemoryLog
 
 from dk_publishing.adapters.notify.telegram import MAX_CAPTION, TelegramNotifier
 from dk_publishing.adapters.platforms import assisted
@@ -114,7 +114,7 @@ def test_publishing_sends_the_card_then_the_video_and_counts_as_sent_not_live(
 
     assert live.external_id == f"{ASSISTED_PREFIX}v1" and live.url is None
     assert len(telegram.sent) == 1 and telegram.videos == [("clip.mp4", "🎬 clip.mp4")]
-    assert log.keys == {"assist:dk:v1"}
+    assert log.keys == ["assist:dk:v1"]
 
 
 def test_a_lost_answer_is_settled_from_the_record_and_never_sends_a_second_card(
@@ -137,7 +137,7 @@ def test_a_telegram_outage_is_retryable_and_leaves_no_record(tmp_path: Path) -> 
     handle = publisher.prepare(snap(), video(tmp_path))
     with pytest.raises(Retryable, match="Telegram"):
         publisher.publish(handle)
-    assert log.keys == set()
+    assert log.keys == []
     assert publisher.find_live(snap(), handle) is None  # so the retry may send it
 
 

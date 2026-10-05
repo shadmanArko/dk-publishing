@@ -43,17 +43,55 @@ I read TikTok's developer rules (October 2026):
 So assisted mode is the dependable route. If you still want to try for direct posting, the steps are
 below; it costs nothing, but expect a possible "no".
 
-## Optional: apply for direct posting
-1. Create a TikTok developer account at [developers.tiktok.com](https://developers.tiktok.com), then go
-   to **Manage apps** and **Connect an app**.
-2. Fill in: app name, a 1024 x 1024 icon (JPEG or PNG, up to 5 MB), category, description, the
-   **Terms of Service URL** and the **Privacy Policy URL**, and the platform (Web, with your website URL).
-3. **Add products:** Login Kit and Content Posting API. For Content Posting API switch on **Direct Post**
-   and request the `video.publish` permission. Set the **redirect URI** the form asks for.
-4. Verify your website domain under **URL properties**.
-5. Test in the **sandbox** first with your own account.
-6. Under **App review**, explain how each product is used and upload a demo video (up to 5, 50 MB
-   each) showing the whole flow, including the privacy choice. Submit, and wait.
-7. Paste the **client key** and **client secret** into `dk.json` under `tiktok`. They are not used yet:
-   direct posting for TikTok is not built, because it only makes sense once TikTok approves the app.
-   Tell me if it is approved and I will build it; the same Sheet rows will keep working.
+## Direct posting: the application, step by step
+This is optional and may be refused (see above). Assisted mode keeps working while you wait.
+
+### 1. The app on TikTok (done once)
+1. [developers.tiktok.com](https://developers.tiktok.com): create an **organization**, then **Create app**
+   (type **Other**). Fill in name, 1024 x 1024 icon, category, description, the **Terms of Service**
+   and **Privacy Policy** URLs of your website, platform **Web** and your website address.
+2. Verify the domain under **URL properties**: choose **Domain**, add the TXT record TikTok shows
+   at your DNS provider, click **Verify**.
+3. **Products:** add **Login Kit** and **Content Posting API** (switch on **Direct Post**).
+   **Scopes:** only `user.info.basic` and `video.publish`.
+4. **Redirect URI** (Login Kit): `https://media.<your domain>/tiktok/callback`. The server answers that
+   address with a short "copy this address" page.
+
+### 2. The sandbox
+1. In the app, open the **Sandbox** tab, **Create Sandbox**, tick **Clone from Production**.
+2. Check the products, scopes and redirect URI were copied. Under **Sandbox settings** add your own
+   TikTok account as a **target user**. Click **Apply changes**.
+3. Reveal the sandbox **client key** and **client secret** and put them in `dk.json`:
+   ```json
+   "tiktok": {
+     "handle": "@yourname",
+     "client_key": "...", "client_secret": "...",
+     "redirect_uri": "https://media.yourbusiness.com/tiktok/callback"
+   }
+   ```
+4. Sign in once: `make connect-tiktok`. The browser opens TikTok; allow the app. TikTok then lands on
+   your redirect address: copy the **full address** of that page and paste it into the terminal. It
+   prints `connected to TikTok as @yourname` and what privacy levels the account may use.
+5. Try one post (private in the sandbox, which is TikTok's rule):
+   ```bash
+   uv run --env-file .env dk live-test tiktok --video clip.mp4 --yes
+   ```
+6. To post from the Sheet instead of Telegram, set `tiktok` to `mode: live` in
+   `deploy/platforms.production.yaml` and `make deploy-secrets`. Back to assisted: `mode: assisted`.
+
+### 3. The demo video and the review
+TikTok wants one video (mp4 or mov, under 50 MB) of the whole flow. Record your screen, with your
+website's address visible at the start, and show in this order:
+1. The Google Sheet: a TikTok row with the video name, caption, **`privacy_level`**, the comment/duet/
+   stitch boxes, and **ready** ticked (this is the owner's consent for that post).
+2. The sign-in: `make connect-tiktok`, TikTok's page asking to allow "DK Publishing" with its
+   permissions, you tapping Allow, and the terminal showing the connected account.
+3. The post being made at the slot (the Sheet row changes to published), then the video appearing in
+   the TikTok app.
+
+In the app's **App review** box paste the text from [tiktok-review-text.md](tiktok-review-text.md),
+upload the video, and **Submit for review**. Then wait; TikTok does not publish a review time.
+
+### 4. If TikTok approves
+Paste the **production** client key and secret into `dk.json`, run `make connect-tiktok` again, set the
+account in TikTok to public, and use `privacy_level: public` in the Sheet. Posts then go out by themselves.

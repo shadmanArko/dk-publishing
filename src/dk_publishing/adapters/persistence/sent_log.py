@@ -24,6 +24,17 @@ class PostgresSentLog:
             ).fetchone()
         return row is not None
 
+    def lookup(self, prefix: str) -> list[str]:
+        """Every recorded key that starts with `prefix`, oldest first."""
+        tenant, prefix = self._split(prefix)
+        with psycopg.connect(self._conninfo) as conn:
+            rows = conn.execute(
+                """SELECT key FROM publishing.alerts_sent
+                   WHERE tenant_id = %s AND starts_with(key, %s) ORDER BY sent_at, key""",
+                (tenant, prefix),
+            ).fetchall()
+        return [str(r[0]) for r in rows]
+
     def mark_sent(self, key: str) -> None:
         tenant, key = self._split(key)
         with psycopg.connect(self._conninfo) as conn:
