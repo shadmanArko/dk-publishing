@@ -6,6 +6,10 @@
 
 :80 {
 	root * /srv/public
+	handle /tiktok/callback {
+		header Content-Type "text/plain; charset=utf-8"
+		respond "TikTok sign-in finished. Copy the full address of this page (it contains code=...) and paste it into the terminal that is waiting for it. You can close this tab afterwards." 200
+	}
 	@file path_regexp ^/[A-Za-z0-9_-]{20,}/[^/]+$
 	handle @file {
 		header Cache-Control "no-store"
