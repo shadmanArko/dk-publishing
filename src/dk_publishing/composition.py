@@ -369,10 +369,10 @@ def meta_refresh(
 
 
 def connect_login(
-    platform: str, env: Mapping[str, str], *, check_only: bool = False
+    platform: str, env: Mapping[str, str], *, check_only: bool = False, again: bool = False
 ) -> ConnectResult:
     """One-time login setup for a platform that needs it."""
-    return connect_from_env(platform, env, check_only=check_only)
+    return connect_from_env(platform, env, check_only=check_only, again=again)
 
 
 def telegram_path(env: Mapping[str, str]) -> str:

@@ -113,16 +113,21 @@ class TikTokCredentials:
         return key, secret
 
 
-def authorize_url(client_key: str, redirect_uri: str, state: str) -> str:
-    query = urlencode(
-        {
-            "client_key": client_key,
-            "scope": SCOPES,
-            "response_type": "code",
-            "redirect_uri": redirect_uri,
-            "state": state,
-        }
-    )
+def authorize_url(
+    client_key: str, redirect_uri: str, state: str, *, always_ask: bool = False
+) -> str:
+    """The address that opens TikTok's "allow this app?" page. `always_ask` makes TikTok show that
+    page even if the account already allowed the app (needed to demonstrate the permissions)."""
+    params = {
+        "client_key": client_key,
+        "scope": SCOPES,
+        "response_type": "code",
+        "redirect_uri": redirect_uri,
+        "state": state,
+    }
+    if always_ask:
+        params["disable_auto_auth"] = "1"
+    query = urlencode(params)
     return f"{AUTHORIZE}?{query}"
 
 

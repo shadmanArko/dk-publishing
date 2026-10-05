@@ -539,3 +539,32 @@ def test_the_live_test_posts_tiktok_privately_and_needs_a_video(tmp_path: Path) 
     video.write_bytes(b"x")
     result = run_live_test("tiktok", {}, settings, video=video)
     assert "PRIVATE video" in result.lines[0] and "Nothing was posted" in result.lines[-1]
+
+
+def test_signing_in_again_shows_the_sign_in_even_when_a_login_is_saved(tmp_path: Path) -> None:
+    c = creds(tmp_path, access_token="act.old", refresh_token="rft.old")
+    opened: list[str] = []
+    server = Server(token_reply(), ok({"creator_username": "dk", "privacy_level_options": []}))
+    result = connect_tiktok(
+        c.path.as_posix() + "#tiktok",
+        again=True,
+        ask=lambda _: "https://m.example/cb?code=C&state=S1",
+        open_browser=lambda url: opened.append(url),
+        transport=server.transport,
+        state="S1",
+    )
+    assert result.ok and opened and c.load()["access_token"] == "act.new"
+    saved = connect_tiktok(
+        c.path.as_posix() + "#tiktok",
+        open_browser=lambda url: opened.append("x"),
+        transport=Server(ok({"creator_username": "dk", "privacy_level_options": []})).transport,
+    )
+    assert saved.ok and "x" not in opened  # without --again a saved login is just checked
+
+
+def test_signing_in_again_asks_tiktok_to_show_the_permissions_page_every_time() -> None:
+    plain = parse_qs(urlparse(authorize_url("K", "https://m.example/cb", "S")).query)
+    again = parse_qs(
+        urlparse(authorize_url("K", "https://m.example/cb", "S", always_ask=True)).query
+    )
+    assert "disable_auto_auth" not in plain and again["disable_auto_auth"] == ["1"]

@@ -94,6 +94,7 @@ def connect_tiktok(
     path: Path | str,
     *,
     check_only: bool = False,
+    again: bool = False,
     ask: Callable[[str], str] = input,
     open_browser: Callable[[str], object] = webbrowser.open,
     transport: httpx.BaseTransport | None = None,
@@ -114,9 +115,9 @@ def connect_tiktok(
             return ConnectResult(
                 False, [f"[FAIL] fill in tiktok.redirect_uri in {credentials.path}"]
             )
-        if not data.get("refresh_token") or not data.get("access_token"):
+        if again or not data.get("refresh_token") or not data.get("access_token"):
             token = state or secrets.token_urlsafe(24)
-            url = authorize_url(key, redirect, token)
+            url = authorize_url(key, redirect, token, always_ask=again)
             lines.append("[did]  opening your browser: sign in to TikTok and allow the app...")
             open_browser(url)
             pasted = ask(
@@ -154,13 +155,13 @@ def connect_tiktok(
 
 
 def connect_from_env(
-    platform: str, env: Mapping[str, str], *, check_only: bool = False
+    platform: str, env: Mapping[str, str], *, check_only: bool = False, again: bool = False
 ) -> ConnectResult:
     """Where the login file lives comes from the environment; the platform's name stays here."""
     if platform == "tiktok":
         ref = env.get("TIKTOK_CREDENTIALS_FILE", "").strip()
         if not ref:
             raise ConfigError("set DK_CONFIG_FILE (run `make init`): TikTok lives in dk.json")
-        return connect_tiktok(ref, check_only=check_only)
+        return connect_tiktok(ref, check_only=check_only, again=again)
     path = env.get("YOUTUBE_CREDENTIALS_FILE", "").strip() or str(DEFAULT_PATH)
     return connect_platform(platform, path, check_only=check_only)

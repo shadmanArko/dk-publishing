@@ -80,6 +80,9 @@ def _run(argv: Sequence[str] | None = None) -> int:
     connect = commands.add_parser("connect", help="one-time login setup for a platform")
     connect.add_argument("platform")
     connect.add_argument("--check", action="store_true", help="only test the saved login")
+    connect.add_argument(
+        "--again", action="store_true", help="sign in again even if already signed in"
+    )
     account = commands.add_parser("account", help="dry-run accounts")
     account_commands = account.add_subparsers(dest="account_command", required=True)
     account_commands.add_parser("list", help="list accounts")
@@ -118,7 +121,7 @@ def _run(argv: Sequence[str] | None = None) -> int:
     if args.command == "account":
         return _account(args)
     if args.command == "connect":
-        return _connect(args.platform, check_only=args.check)
+        return _connect(args.platform, check_only=args.check, again=args.again)
     if args.command == "telegram":
         return _telegram(args.telegram_command)
     if args.command == "meta":
@@ -367,9 +370,9 @@ def meta_default() -> str:
     return str(DEFAULT_PATH)
 
 
-def _connect(platform: str, *, check_only: bool) -> int:
+def _connect(platform: str, *, check_only: bool, again: bool = False) -> int:
     try:
-        result = composition.connect_login(platform, _env(), check_only=check_only)
+        result = composition.connect_login(platform, _env(), check_only=check_only, again=again)
     except ConfigError as exc:
         print(f"[FAIL] {exc}", file=sys.stderr)
         return 1

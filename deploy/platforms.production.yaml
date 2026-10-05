@@ -22,7 +22,7 @@ platforms:
   instagram: {tab: Instagram, mode: live, api_version: v25.0, prepare_lead: 30m, prepared_ttl: 24h, pulls_media_by_url: true}
   threads:   {tab: Threads, mode: live, api_version: v1.0, prepare_lead: 10m, pulls_media_by_url: true}
   youtube:   {tab: YouTube, mode: live, native_window: [15m, 180d], prepare_lead: 5m}
-  tiktok:    {tab: TikTok, mode: assisted}
+  tiktok:    {tab: TikTok, mode: live}
   linkedin:  {tab: LinkedIn, mode: dry_run}
   x:         {tab: X, mode: off}
   reddit:    {tab: Reddit, mode: off}
