@@ -2,7 +2,16 @@
 
 from collections.abc import Callable
 
-from dagster import Config, Failure, JobDefinition, OpExecutionContext, job, op
+from dagster import (
+    Backoff,
+    Config,
+    Failure,
+    JobDefinition,
+    OpExecutionContext,
+    RetryPolicy,
+    job,
+    op,
+)
 
 from dk_publishing.adapters.config.platforms import ConfigError
 from dk_publishing.application.services import Services
@@ -72,7 +81,12 @@ def housekeeping() -> None:
     housekeeping_op()
 
 
-@op
+# A dropped connection to Google for a few seconds must not page anyone: the sync is safe to repeat
+# (it only reads the Sheet and writes status text), so it retries before the run counts as failed.
+SYNC_RETRY = RetryPolicy(max_retries=3, delay=30, backoff=Backoff.EXPONENTIAL)
+
+
+@op(retry_policy=SYNC_RETRY)
 def sync_sheet_op(context: OpExecutionContext, sheet_sync: SheetSyncResource) -> None:
     report = sync_sheet(sheet_sync.services())
     context.log.info(
@@ -83,7 +97,8 @@ def sync_sheet_op(context: OpExecutionContext, sheet_sync: SheetSyncResource) ->
     for problem in report.problems:
         context.log.warning(problem)
     if report.halted:
-        raise Failure(description=report.halted)  # a person must look before anything is cancelled
+        # A person must look before anything is cancelled: retrying would only halt again.
+        raise Failure(description=report.halted, allow_retries=False)
     if report.errors:
         raise Failure(description="; ".join(report.errors))
 

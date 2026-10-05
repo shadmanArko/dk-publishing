@@ -466,3 +466,15 @@ def test_the_health_job_survives_telegram_being_half_set_up(conninfo: str, seed:
         resources={"notify": HalfBroken(database_url=rig.conninfo)},
     )
     assert result.success
+
+
+def test_a_brief_network_failure_in_the_sheet_sync_is_retried_not_reported() -> None:
+    from dk_publishing.entrypoints.dagster_defs.jobs import SYNC_RETRY, sync_sheet_op
+
+    assert sync_sheet_op.retry_policy is SYNC_RETRY
+    assert SYNC_RETRY.max_retries == 3 and SYNC_RETRY.delay == 30
+    # the deliberate stop (too many cancellations) is never retried
+    from dk_publishing.entrypoints.dagster_defs import jobs
+
+    source = Path(jobs.__file__).read_text()
+    assert "allow_retries=False" in source
