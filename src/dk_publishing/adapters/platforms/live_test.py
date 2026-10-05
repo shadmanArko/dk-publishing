@@ -26,6 +26,19 @@ SUPPORTED = ("facebook", "threads", "instagram", "youtube", "tiktok")
 NEEDS_VIDEO = ("instagram", "youtube", "tiktok")
 
 
+class _Remember:
+    """A throwaway publish record: the live test runs without a database."""
+
+    def __init__(self) -> None:
+        self._keys: list[str] = []
+
+    def mark_sent(self, key: str) -> None:
+        self._keys.append(key)
+
+    def lookup(self, prefix: str) -> list[str]:
+        return [k for k in self._keys if k.startswith(prefix)]
+
+
 @dataclass
 class LiveTestResult:
     ok: bool
@@ -91,7 +104,7 @@ def run_live_test(
         return result
 
     try:
-        publisher = build_live_publisher(platform, settings, env, transport)
+        publisher = build_live_publisher(platform, settings, env, transport, _Remember())
         snapshot = VariantSnapshot(
             variant_id=str(uuid.uuid4()),
             tenant_id="live-test",
