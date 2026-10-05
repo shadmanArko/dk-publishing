@@ -5,6 +5,7 @@ from dk_publishing.entrypoints.dagster_defs.jobs import (
     housekeeping,
     renew_tokens,
     sync_sheet_job,
+    token_health,
 )
 
 # Berlin time, so daylight saving never shifts a schedule.
@@ -41,6 +42,15 @@ token_renewal_schedule = ScheduleDefinition(
     name="token_renewal",
     job=renew_tokens,
     cron_schedule="30 3 * * *",
+    execution_timezone="Europe/Berlin",
+    default_status=DefaultScheduleStatus.RUNNING,
+)
+
+# After the renewal at 03:30, look at every login and permission once more, and warn on Telegram.
+token_health_schedule = ScheduleDefinition(
+    name="token_health",
+    job=token_health,
+    cron_schedule="45 3 * * *",
     execution_timezone="Europe/Berlin",
     default_status=DefaultScheduleStatus.RUNNING,
 )

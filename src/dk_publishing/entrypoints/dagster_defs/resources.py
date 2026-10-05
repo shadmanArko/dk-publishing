@@ -76,5 +76,8 @@ class NotifyResource(ConfigurableResource):  # type: ignore[type-arg]
     def warnings(self) -> list[str]:
         return composition.credential_warnings(composition.environment())
 
+    def health_failures(self) -> list[str]:
+        return composition.health_failures(composition.environment())
+
     def heartbeat(self) -> bool | None:
         return composition.ping_alive(composition.environment())

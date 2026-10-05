@@ -222,3 +222,20 @@ def test_check_setup_requires_telegram_when_a_platform_is_handed_to_you(
     ok = check_setup(resolve_env({"DK_CONFIG_FILE": str(dk)}), load_platforms(config))
     assert not any("hands posts to you" in line for line in ok.lines)
     assert any("[ok]   tiktok: filled in" in line for line in ok.lines)
+
+
+def test_the_nightly_check_lists_only_what_is_broken(dk: Path) -> None:
+    assert composition.health_failures({}) == []  # no dk.json: nothing to watch
+    env = {"DK_CONFIG_FILE": str(dk)}
+    failures = composition.health_failures(resolve_env(env))
+    assert failures and all(line.startswith("[FAIL]") for line in failures)  # Google is empty
+    assert not any("[ok]" in line or "[skip]" in line for line in failures)
+
+
+def test_the_nightly_check_never_crashes_the_job(dk: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def boom(env: object) -> None:
+        raise RuntimeError("network down")
+
+    monkeypatch.setattr(composition, "check_setup_report", boom)
+    [line] = composition.health_failures({"DK_CONFIG_FILE": str(dk)})
+    assert "nightly check itself failed (RuntimeError)" in line

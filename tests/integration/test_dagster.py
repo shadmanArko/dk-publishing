@@ -83,6 +83,7 @@ def test_every_expected_definition_is_present() -> None:
         "sync_sheet",
         "daily_digest",
         "renew_tokens",
+        "token_health",
     }
     assert defs.get_sensor_def("due_actions").minimum_interval_seconds == 30
     assert defs.get_sensor_def("sheet_changed").minimum_interval_seconds == 120
@@ -312,6 +313,9 @@ class FakeNotify(NotifyResource):
     def warnings(self) -> list[str]:
         return ["a token is running out"]
 
+    def health_failures(self) -> list[str]:
+        return []
+
     def heartbeat(self) -> bool | None:
         _BEATS.append(self.database_url)
         return True
@@ -420,3 +424,45 @@ def test_half_filled_telegram_settings_are_reported_not_raised(conninfo: str, se
         instance=DagsterInstance.ephemeral(), resources={"notify": notify}
     )
     assert digest.success
+
+
+class FailingLogins(FakeNotify):
+    def health_failures(self) -> list[str]:
+        return ["[FAIL] the token lacks permission: pages_manage_posts"]
+
+
+def test_the_nightly_health_job_warns_once_and_stays_quiet_when_all_is_well(
+    conninfo: str, seed: Seed
+) -> None:
+    rig = Rig(conninfo, seed)
+    definitions, _, telegram = alert_wiring(rig)
+    job_def = definitions.get_job_def("token_health")
+    instance = DagsterInstance.ephemeral()
+
+    quiet = FakeNotify(database_url=rig.conninfo)  # health_failures() of the fake: none
+    quiet_run = job_def.execute_in_process(instance=instance, resources={"notify": quiet})
+    assert quiet_run.success and telegram.sent == []
+
+    broken = FailingLogins(database_url=rig.conninfo)
+    for _ in range(2):
+        assert job_def.execute_in_process(instance=instance, resources={"notify": broken}).success
+    assert len(telegram.sent) == 1 and "pages_manage_posts" in telegram.sent[0]
+
+    assert (
+        defs.get_schedule_def("token_health").cron_schedule == "45 3 * * *"
+    )  # after the 03:30 renewal
+
+
+def test_the_health_job_survives_telegram_being_half_set_up(conninfo: str, seed: Seed) -> None:
+    rig = Rig(conninfo, seed)
+    definitions, _, _ = alert_wiring(rig)
+
+    class HalfBroken(HalfConfiguredNotify):
+        def health_failures(self) -> list[str]:
+            return ["[FAIL] something"]
+
+    result = definitions.get_job_def("token_health").execute_in_process(
+        instance=DagsterInstance.ephemeral(),
+        resources={"notify": HalfBroken(database_url=rig.conninfo)},
+    )
+    assert result.success

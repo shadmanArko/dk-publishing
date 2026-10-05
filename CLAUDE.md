@@ -107,3 +107,6 @@
   `mode: assisted` = Telegram hand-over. Built only to pass TikTok's sandbox review; an unaudited app posts "only me".
   The publish id is recorded BEFORE the upload (the duplicate guard); never move it after. Tokens live in `dk.json` `tiktok`
   and renew themselves. The review text is `docs/setup/tiktok-review-text.md`.
+- **Nightly login check** (`token_health`, 03:45 Berlin): `composition.health_failures` = the `[FAIL]` lines of `check-setup`;
+  `use_cases/health.py` sends them once per day per distinct set. It exists because Meta silently dropped permissions from a
+  non-expiring token. Anything that makes `check-setup` fail will page the owner nightly, so keep that command quiet when healthy.

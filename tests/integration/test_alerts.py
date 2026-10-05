@@ -140,3 +140,40 @@ def test_the_sent_record_is_per_tenant_key(conninfo: str, seed: Seed) -> None:
         uow.commit()
     with psycopg.connect(conninfo) as conn:
         assert conn.execute("SELECT count(*) FROM publishing.alerts_sent").fetchone() == (2,)
+
+
+# --- the nightly health warning ------------------------------------------------------------------
+
+
+def test_a_broken_login_is_reported_once_a_day_and_again_the_next_morning(
+    conninfo: str, seed: Seed
+) -> None:
+    from dk_publishing.application.use_cases.health import report_health
+
+    rig = Rig(conninfo, seed)
+    telegram = FakeNotifier()
+    failures = [
+        "[FAIL] the token lacks permission: pages_manage_posts. Generate it again with them ticked.",
+        "[FAIL] it cannot publish to Instagram <needs> instagram_content_publish",
+    ]
+    assert report_health(rig.services, telegram, failures)
+    text = telegram.sent[0]
+    assert "A login needs attention" in text and "pages_manage_posts" in text
+    assert "[FAIL]" not in text and "&lt;needs&gt;" in text  # tidy and escaped
+    assert "docs/setup/update-secrets.md" in text
+
+    assert not report_health(rig.services, telegram, list(reversed(failures)))  # same problems
+    assert len(telegram.sent) == 1
+
+    assert report_health(rig.services, telegram, [*failures, "[FAIL] a new problem"])  # a new set
+    rig.clock.advance(timedelta(days=1))
+    assert report_health(rig.services, telegram, failures)  # reminder the next morning
+    assert len(telegram.sent) == 3
+
+
+def test_when_all_is_well_nobody_is_bothered(conninfo: str, seed: Seed) -> None:
+    from dk_publishing.application.use_cases.health import report_health
+
+    telegram = FakeNotifier()
+    assert not report_health(Rig(conninfo, seed).services, telegram, [])
+    assert telegram.sent == []

@@ -47,6 +47,11 @@ make deploy-secrets
 **5. Look at the end of the output.** It repeats the check on the server. The line for that platform
 must say `[ok]`. Done.
 
+## You get warned before a post fails
+Every night at 03:45 (Berlin) the server re-checks every login and permission, the same checks as
+`make check-setup`, and sends a Telegram message such as "A login needs attention" listing what is
+broken. The same problem is repeated each morning until it is fixed. Follow the table below.
+
 ## What to do for which problem
 | What you see | What to do |
 | --- | --- |

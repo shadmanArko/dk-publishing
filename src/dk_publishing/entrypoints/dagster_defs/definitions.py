@@ -12,6 +12,7 @@ from dk_publishing.entrypoints.dagster_defs.jobs import (
     renew_tokens,
     schedule_native_job,
     sync_sheet_job,
+    token_health,
 )
 from dk_publishing.entrypoints.dagster_defs.resources import (
     NotifyResource,
@@ -22,6 +23,7 @@ from dk_publishing.entrypoints.dagster_defs.schedules import (
     daily_digest_schedule,
     housekeeping_schedule,
     sheet_sync_fallback,
+    token_health_schedule,
     token_renewal_schedule,
 )
 from dk_publishing.entrypoints.dagster_defs.sensors import (
@@ -50,6 +52,7 @@ def build_definitions(
             sync_sheet_job,
             daily_digest,
             renew_tokens,
+            token_health,
         ],
         sensors=[due_actions, sheet_changed, notifications, failed_run_alert],
         schedules=[
@@ -57,6 +60,7 @@ def build_definitions(
             sheet_sync_fallback,
             daily_digest_schedule,
             token_renewal_schedule,
+            token_health_schedule,
         ],
         resources={
             "services": services,

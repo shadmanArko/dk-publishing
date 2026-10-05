@@ -483,3 +483,15 @@ def sync_accounts(
         add_account(database_url, platform, name, tenant_id, external_id=external_id)
         lines.append(f"{platform}: added {name!r} (id {external_id})")
     return lines
+
+
+def health_failures(env: Mapping[str, str]) -> list[str]:
+    """What is broken right now, as plain lines, from the same checks as `make check-setup`.
+    Nothing is posted. Empty when all is well, or when there is no dk.json to check."""
+    if config_path(env) is None:
+        return []
+    try:
+        report = check_setup_report(env)
+    except Exception as exc:  # the watchman must never crash on what it is watching
+        return [f"the nightly check itself failed ({type(exc).__name__}); run `make check-setup`"]
+    return [line for line in report.lines if line.startswith("[FAIL]")]

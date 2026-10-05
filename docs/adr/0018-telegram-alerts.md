@@ -18,6 +18,13 @@ Status: accepted (2026-10-02)
   Dagster daemon stops.
 - Telegram is optional: with no `TELEGRAM_CREDENTIALS_FILE` nothing is sent and nothing fails.
 
+## Addendum: nightly login check
+
+`token_health` runs at 03:45 Berlin (after the 03:30 token renewal) and reuses `check-setup`'s checks
+(`composition.health_failures`): every `[FAIL]` line is sent in one Telegram message, once per Berlin day
+per distinct set of problems (`health:<date>:<hash>` in `alerts_sent`). Found necessary when Meta removed
+two permissions from a non-expiring token without any notice. The check never posts and never raises.
+
 ## Not built yet
 
 Quota, disk and media-missing alerts; approval and assisted-publishing buttons (ADR 0014 dropped approvals).

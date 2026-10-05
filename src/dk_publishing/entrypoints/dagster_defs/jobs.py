@@ -8,6 +8,7 @@ from dk_publishing.adapters.config.platforms import ConfigError
 from dk_publishing.application.services import Services
 from dk_publishing.application.use_cases.alerts import send_digest
 from dk_publishing.application.use_cases.dispatch import expire_variant
+from dk_publishing.application.use_cases.health import report_health
 from dk_publishing.application.use_cases.housekeeping import (
     fail_stale_scheduling,
     flag_stale_publishing,
@@ -125,3 +126,28 @@ def renew_tokens_op(context: OpExecutionContext, services: ServicesResource) -> 
 @job
 def renew_tokens() -> None:
     renew_tokens_op()
+
+
+@op
+def token_health_op(context: OpExecutionContext, notify: NotifyResource) -> None:
+    failures = notify.health_failures()
+    if not failures:
+        context.log.info("all logins and permissions look fine")
+        return
+    for line in failures:
+        context.log.warning(line)
+    try:
+        notifier = notify.notifier()
+    except ConfigError as exc:
+        context.log.warning(f"could not warn you on Telegram, it is incomplete: {exc}")
+        return
+    if notifier is None:
+        context.log.warning("Telegram is not configured, so nobody was told")
+        return
+    sent = report_health(notify.services(), notifier, failures)
+    context.log.info("warning sent" if sent else "already warned today")
+
+
+@job
+def token_health() -> None:
+    token_health_op()
