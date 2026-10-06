@@ -129,11 +129,21 @@ class FakeGraph:
             if held and form.get("scheduled_publish_time")
             else None
         )
-        if held and due is None:
+        if held and due is None and edge != "photos":  # a staged photo needs no time
             return graph_error(400, 100, "(#100) scheduled_publish_time is required")
         if edge == "feed":
             if not form.get("message") and not form.get("link"):
                 return graph_error(400, 100, "(#100) The parameter message is required")
+            attached = [
+                json.loads(v)["media_fbid"]
+                for k, v in form.items()
+                if k.startswith("attached_media[")
+            ]
+            staged = {p["id"]: p for p in self.items["photos"]}
+            for photo_id in attached:
+                if photo_id not in staged or staged[photo_id].get("published", True):
+                    return graph_error(400, 100, f"(#100) Photo {photo_id} cannot be attached")
+                staged[photo_id]["published"] = True  # attaching is what makes it visible
             post_id = f"{page}_{n}"
             self.items["feed"].append(
                 {"id": post_id, "message": form.get("message", ""), "created_time": created,
@@ -142,9 +152,10 @@ class FakeGraph:
             return httpx.Response(200, json={"id": post_id})
         if edge == "photos":
             post_id = f"{page}_{n}"
+            hidden = form.get("published") == "false"
             self.items["photos"].append(
                 {"id": f"photo{n}", "name": form.get("caption", ""), "created_time": created,
-                 "permalink_url": f"/photo.php?fbid={n}"}
+                 "permalink_url": f"/photo.php?fbid={n}", "published": not hidden}
             )  # fmt: skip
             return httpx.Response(200, json={"id": f"photo{n}", "post_id": post_id})
         if edge == "videos":

@@ -41,11 +41,11 @@ platform_after:
 
 platform_extras:
   instagram:
-    - {name: format, kind: dropdown, options: [feed, carousel, reel], required: true}
+    - {name: format, kind: dropdown, options: [feed, carousel, reel, story], required: true, note: "carousel needs 2-10 photos; a story is one photo or video and carries no caption."}
     - {name: share_to_feed, kind: checkbox, note: "Reels only: also show the reel on the profile grid."}
     - {name: cover_at_s, kind: number, note: "Reels only: second of the video to use as the cover."}
   facebook:
-    - {name: format, kind: dropdown, options: [post, photo, video, reel], required: true}
+    - {name: format, kind: dropdown, options: [post, photo, video, reel], required: true, note: "photo with several files in the media column posts them as one album."}
     - {name: link, kind: text, note: "Optional link attached to the post."}
     - {name: delivery, kind: dropdown, options: [direct, native], note: "Blank = direct. direct: this system publishes at the slot. native: the platform holds the post and publishes it itself at the slot, even if this system is off (the slot must be at least 10 minutes away). Withdrawing or editing the row removes it from the platform first."}
   threads:

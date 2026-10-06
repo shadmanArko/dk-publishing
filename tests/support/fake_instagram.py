@@ -18,6 +18,7 @@ class FakeInstagram:
         self.created = created or T0 + timedelta(minutes=1)
         self.containers: dict[str, dict[str, Any]] = {}
         self.media: list[dict[str, Any]] = []
+        self.stories: list[dict[str, Any]] = []  # stories are not part of the media list
         self.uploads: list[dict[str, Any]] = []
         self.requests: list[httpx.Request] = []
         self.forms: list[dict[str, str]] = []
@@ -78,9 +79,13 @@ class FakeInstagram:
             return graph_error(400, 100, "Unsupported post request. Object does not exist.")
         self._n += 1
         if edge == "media":
-            if form.get("media_type") not in (None, "REELS", "IMAGE"):
+            if form.get("media_type") not in (None, "REELS", "IMAGE", "CAROUSEL", "STORIES"):
                 return graph_error(400, 100, "Invalid media_type")
             cid = f"C{self._n}"
+            if form.get("media_type") == "CAROUSEL":
+                kids = [k for k in form.get("children", "").split(",") if k]
+                if not 2 <= len(kids) <= 10 or any(k not in self.containers for k in kids):
+                    return graph_error(400, 100, "Invalid children for the carousel")
             resumable = form.get("upload_type") == "resumable"
             if form.get("video_url") and not form["video_url"].startswith("https://"):
                 return graph_error(400, 9004, "The media could not be fetched from that URL")
@@ -100,6 +105,9 @@ class FakeInstagram:
                 return graph_error(400, 100, "Invalid or already published container")
             container["published"] = True
             mid = f"M{self._n}"
+            if container["form"].get("media_type") == "STORIES":
+                self.stories.append({"id": mid, "form": container["form"]})
+                return httpx.Response(200, json={"id": mid})  # stories are not in the media list
             self.media.append(
                 {"id": mid, "caption": container["form"].get("caption", ""),
                  "permalink": f"https://www.instagram.com/reel/{mid}/",

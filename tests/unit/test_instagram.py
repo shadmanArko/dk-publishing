@@ -81,8 +81,7 @@ def files(tmp_path: Path, name: str = "clip.mp4", data: bytes = b"REELBYTES") ->
 @pytest.mark.parametrize(
     ("snapshot", "field", "words"),
     [
-        (snap("carousel"), "format", "carousels are not supported yet"),
-        (snap("story"), "format", "must be one of: feed, reel"),
+        (snap("igtv"), "format", "must be one of: feed, carousel, reel, story"),
         (snap(caption="x" * 2201), "caption", "2,201 characters; Instagram allows 2,200"),
         (snap(caption="#a " * 31), "caption", "at most 30 hashtags"),
         (snap(media=()), "media", "needs exactly one file"),
@@ -515,3 +514,113 @@ def test_a_reel_whose_link_instagram_cannot_fetch_leaves_no_public_link_behind(
     with pytest.raises(PublishingError):
         publisher.prepare(snap(), files(tmp_path))
     assert list((tmp_path / "public").iterdir()) == []
+
+
+# --- carousels and stories ------------------------------------------------------------------------
+
+
+def photos(tmp_path: Path, n: int) -> list[Rendition]:
+    out = []
+    for i in range(n):
+        path = tmp_path / f"{i + 1:02d}.jpg"
+        path.write_bytes(b"JPEG" + bytes([i]))
+        out.append(Rendition("original", str(path), f"sha{i}"))
+    return out
+
+
+def album(n: int = 4, **more: Any) -> VariantSnapshot:
+    names = tuple(f"{i + 1:02d}.jpg" for i in range(n))
+    return snap("carousel", media=names, **more)
+
+
+def test_a_carousel_is_one_container_per_photo_plus_one_that_holds_them(tmp_path: Path) -> None:
+    publisher, fake = build(tmp_path=tmp_path, public=True)
+    handle = publisher.prepare(album(3, caption="Kacchi vs biryani"), photos(tmp_path, 3))
+
+    children, parent = fake.forms[:3], fake.forms[3]
+    assert all(
+        c["is_carousel_item"] == "true" and c["image_url"].startswith(BASE) for c in children
+    )
+    assert parent["media_type"] == "CAROUSEL" and parent["caption"] == "Kacchi vs biryani"
+    assert parent["children"] == "C1,C2,C3" and handle["container_id"] == "C4"
+    assert len(handle["public_urls"]) == 3 and fake.uploads == []  # all fetched by link
+
+    live = publisher.publish(handle)
+    assert live.url == f"https://www.instagram.com/reel/{live.external_id}/"
+    assert list((tmp_path / "public").iterdir()) == []  # every link removed after publishing
+    assert publisher.find_live(album(3, caption="Kacchi vs biryani"), handle) is not None
+
+
+@pytest.mark.parametrize(
+    ("snapshot", "words"),
+    [
+        (album(1), "needs 2 to 10 photos, not 1"),
+        (album(11), "needs 2 to 10 photos, not 11"),
+        (snap("carousel", media=("a.jpg", "b.mp4")), "'b.mp4' is not a photo"),
+    ],
+)
+def test_a_carousel_must_be_two_to_ten_photos(
+    tmp_path: Path, snapshot: VariantSnapshot, words: str
+) -> None:
+    publisher, _ = build(tmp_path=tmp_path, public=True)
+    assert any(words in p.message for p in publisher.validate(snapshot))
+
+
+def test_a_carousel_cannot_be_made_without_a_public_address() -> None:
+    problems = build()[0].validate(album(3))
+    assert any("public web address" in p.message for p in problems)
+
+
+def test_a_carousel_that_fails_part_way_leaves_no_public_link_behind(tmp_path: Path) -> None:
+    fake = FakeInstagram()
+    publisher, _ = build(fake, tmp_path=tmp_path, public=True)
+    fake.fail_next(httpx.Response(400, json={"error": {"message": "x", "code": 9004}}), only="POST")
+    with pytest.raises(PublishingError):
+        publisher.prepare(album(3), photos(tmp_path, 3))
+    assert list((tmp_path / "public").iterdir()) == []
+
+
+def test_a_story_is_one_photo_or_video_and_has_no_caption(tmp_path: Path) -> None:
+    publisher, fake = build(tmp_path=tmp_path, public=True)
+    handle = publisher.prepare(
+        snap("story", media=("01.jpg",), caption="ignored"), photos(tmp_path, 1)
+    )
+    form = fake.forms[0]
+    assert form["media_type"] == "STORIES" and form["image_url"].startswith(BASE)
+    assert "caption" not in form and "video_url" not in form
+
+    clip = tmp_path / "clip.mp4"
+    clip.write_bytes(b"VID")
+    video_story = snap("story", media=("clip.mp4",))
+    publisher.prepare(video_story, [Rendition("original", str(clip), "s")])
+    assert fake.forms[1]["media_type"] == "STORIES" and "video_url" in fake.forms[1]
+
+    live = publisher.publish(handle)
+    assert live.external_id and live.url is None  # stories have no permalink to show
+    assert fake.media == [] and len(fake.stories) == 1
+
+
+def test_a_story_that_was_published_is_recognised_by_its_container_not_by_a_caption(
+    tmp_path: Path,
+) -> None:
+    publisher, _ = build(tmp_path=tmp_path, public=True)
+    snapshot = snap("story", media=("01.jpg",))
+    handle = publisher.prepare(snapshot, photos(tmp_path, 1))
+    assert publisher.find_live(snapshot, handle) is None
+    publisher.publish(handle)
+    assert publisher.find_live(snapshot, handle) is not None
+
+
+@pytest.mark.parametrize(
+    ("media", "words"),
+    [
+        ((), "exactly one file"),
+        (("a.jpg", "b.jpg"), "exactly one file"),
+        (("a.gif",), "not a story file"),
+    ],
+)
+def test_a_story_needs_exactly_one_photo_or_video(
+    tmp_path: Path, media: tuple[str, ...], words: str
+) -> None:
+    publisher, _ = build(tmp_path=tmp_path, public=True)
+    assert any(words in p.message for p in publisher.validate(snap("story", media=media)))

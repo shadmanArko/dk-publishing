@@ -5,6 +5,8 @@ Instagram can process it), then publish the container (`publish`).
 
 - A photo is fetched by Instagram from a public URL, so it needs the public-media link store (the
   server provides one; a laptop does not).
+- A carousel (2-10 photos) is one container per photo plus one that holds them; a story is one photo
+  or video and carries no caption. Both are fetched from public links.
 - A reel is fetched the same way when a public-media store is configured (`video_url`). Without
   one it is uploaded straight from the local file with Instagram's resumable upload. The link is
   preferred because the resumable endpoint answered HTTP 500 "unknown error" for every file when
@@ -29,9 +31,11 @@ from dk_publishing.domain.publishing import LivePost, Rendition, VariantSnapshot
 UPLOAD_HOST = "https://rupload.facebook.com"
 MAX_CAPTION = 2200
 MAX_HASHTAGS = 30
-FORMATS = ("feed", "reel")
+FORMATS = ("feed", "carousel", "reel", "story")
 REEL_TYPES = (".mp4", ".mov")
 PHOTO_TYPES = (".jpg", ".jpeg")  # Instagram accepts JPEG only
+STORY_TYPES = (*PHOTO_TYPES, *REEL_TYPES)  # a story is one photo or one short video
+CAROUSEL_SIZE = (2, 10)
 LOOKBACK = timedelta(minutes=15)
 
 
@@ -68,8 +72,6 @@ class InstagramPublisher:
         fmt = str(content.get("format") or "")
         caption = str(content.get("caption") or "")
         names = [str(m.get("name", "")) for m in content.get("media") or []]
-        if fmt == "carousel":
-            return [Violation("format", "Instagram carousels are not supported yet.")]
         if fmt not in FORMATS:
             return [Violation("format", f"format must be one of: {', '.join(FORMATS)}.")]
 
@@ -85,19 +87,13 @@ class InstagramPublisher:
             problems.append(
                 Violation("caption", f"A caption can have at most {MAX_HASHTAGS} hashtags.")
             )
-        wanted, kinds = ("reel", REEL_TYPES) if fmt == "reel" else ("photo", PHOTO_TYPES)
-        if len(names) != 1:
-            problems.append(Violation("media", f"An Instagram {wanted} needs exactly one file."))
-        elif not names[0].lower().endswith(kinds):
-            problems.append(
-                Violation("media", f"'{names[0]}' is not a {wanted} file ({', '.join(kinds)}).")
-            )
-        if fmt == "feed" and self._public is None:
+        problems.extend(_media_problems(fmt, names))
+        if fmt != "reel" and self._public is None:
             problems.append(
                 Violation(
                     "media",
-                    "Instagram fetches photos from a public web address, which only the server "
-                    "provides (PUBLIC_MEDIA_BASE_URL). Use a reel from here.",
+                    "Instagram fetches photos, carousels and stories from a public web address, "
+                    "which only the server provides (PUBLIC_MEDIA_BASE_URL). Use a reel from here.",
                 )
             )
         cover = content.get("cover_at_s")
@@ -114,31 +110,13 @@ class InstagramPublisher:
         if not media:
             raise Rejected("the media file was not downloaded, so there is nothing to upload")
         self._check_quota()
-        data: dict[str, Any] = {"caption": str(snapshot.content.get("caption") or "")}
+        caption = str(snapshot.content.get("caption") or "")
         urls: list[str] = []
-
-        by_link = self._public is not None
-        if fmt == "reel":
-            data["media_type"] = "REELS"
-            if not by_link:
-                data["upload_type"] = "resumable"
-            data["share_to_feed"] = "true" if snapshot.content.get("share_to_feed") else "false"
-            cover = snapshot.content.get("cover_at_s")
-            if cover is not None:
-                data["thumb_offset"] = str(int(float(cover) * 1000))
-        elif self._public is None:
-            raise Rejected("this photo has no public address to be fetched from")
-        if self._public is not None:
-            url = self._public.expose(media[0])
-            urls.append(url)
-            data["video_url" if fmt == "reel" else "image_url"] = url
-
         try:
-            created = self._graph.post(f"{self._account}/media", data)
-            container = str(created["id"])
-            if fmt == "reel" and not by_link:
-                self._upload(created, container, media[0])
-            self._wait_until_ready(container)
+            if fmt == "carousel":
+                container = self._carousel(media, caption, urls)
+            else:
+                container = self._single(fmt, snapshot, media[0], caption, urls)
         except PublishingError:
             for url in urls:  # a container that never became usable must not leave a public link
                 if self._public:
@@ -152,6 +130,60 @@ class InstagramPublisher:
             "container_id": container,
             "public_urls": urls,
         }
+
+    def _single(
+        self, fmt: str, snapshot: VariantSnapshot, file: Rendition, caption: str, urls: list[str]
+    ) -> str:
+        """A reel, a photo or a story: one container made from one file."""
+        by_link = self._public is not None
+        data: dict[str, Any] = {}
+        if fmt != "story":
+            data["caption"] = caption  # a story carries no caption on Instagram
+        if fmt == "reel":
+            data["media_type"] = "REELS"
+            if not by_link:
+                data["upload_type"] = "resumable"
+            data["share_to_feed"] = "true" if snapshot.content.get("share_to_feed") else "false"
+            cover = snapshot.content.get("cover_at_s")
+            if cover is not None:
+                data["thumb_offset"] = str(int(float(cover) * 1000))
+        elif self._public is None:
+            raise Rejected("this post has no public address to be fetched from")
+        if fmt == "story":
+            data["media_type"] = "STORIES"
+        if self._public is not None:
+            url = self._public.expose(file)
+            urls.append(url)
+            video = fmt == "reel" or (fmt == "story" and file.path.lower().endswith(REEL_TYPES))
+            data["video_url" if video else "image_url"] = url
+        created = self._graph.post(f"{self._account}/media", data)
+        container = str(created["id"])
+        if fmt == "reel" and not by_link:
+            self._upload(created, container, file)
+        self._wait_until_ready(container)
+        return container
+
+    def _carousel(self, media: Sequence[Rendition], caption: str, urls: list[str]) -> str:
+        """One container per photo, then one container that holds them all."""
+        if self._public is None:
+            raise Rejected("this carousel has no public address to be fetched from")
+        children: list[str] = []
+        for file in media:
+            url = self._public.expose(file)
+            urls.append(url)
+            child = self._graph.post(
+                f"{self._account}/media", {"image_url": url, "is_carousel_item": "true"}
+            )
+            children.append(str(child["id"]))
+        for child_id in children:
+            self._wait_until_ready(child_id)
+        created = self._graph.post(
+            f"{self._account}/media",
+            {"media_type": "CAROUSEL", "children": ",".join(children), "caption": caption},
+        )
+        container = str(created["id"])
+        self._wait_until_ready(container)
+        return container
 
     def _upload(self, created: dict[str, Any], container: str, file: Rendition) -> None:
         uri = created.get("uri") or f"{UPLOAD_HOST}/ig-api-upload/{self._version}/{container}"
@@ -230,7 +262,10 @@ class InstagramPublisher:
         caption = str(snapshot.content.get("caption") or "").strip()
         since = snapshot.publish_at - LOOKBACK
         params = {"fields": "id,caption,permalink,timestamp", "limit": "25"}
-        for item in self._graph.get(f"{self._account}/media", params).get("data", []):
+        story = str(snapshot.content.get("format")) == "story"  # no caption to recognise it by
+        for item in (
+            [] if story else self._graph.get(f"{self._account}/media", params).get("data", [])
+        ):
             if str(item.get("caption") or "").strip() == caption and _stamp(item) >= since:
                 link = item.get("permalink")
                 return LivePost(str(item["id"]), link if isinstance(link, str) else None)
@@ -238,6 +273,28 @@ class InstagramPublisher:
         if container and self._status(str(container)) == "PUBLISHED":
             return LivePost(str(container), None)  # live, but not in the list yet
         return None
+
+
+def _media_problems(fmt: str, names: list[str]) -> list[Violation]:
+    if fmt == "carousel":
+        low, high = CAROUSEL_SIZE
+        if not low <= len(names) <= high:
+            return [
+                Violation("media", f"A carousel needs {low} to {high} photos, not {len(names)}.")
+            ]
+        bad = [n for n in names if not n.lower().endswith(PHOTO_TYPES)]
+        return [
+            Violation("media", f"'{n}' is not a photo ({', '.join(PHOTO_TYPES)}).") for n in bad
+        ]
+    wanted, kinds = {
+        "reel": ("reel", REEL_TYPES),
+        "story": ("story", STORY_TYPES),
+    }.get(fmt, ("photo", PHOTO_TYPES))
+    if len(names) != 1:
+        return [Violation("media", f"An Instagram {wanted} needs exactly one file.")]
+    if not names[0].lower().endswith(kinds):
+        return [Violation("media", f"'{names[0]}' is not a {wanted} file ({', '.join(kinds)}).")]
+    return []
 
 
 def _stamp(item: dict[str, Any]) -> datetime:

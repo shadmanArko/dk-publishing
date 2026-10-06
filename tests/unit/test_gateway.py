@@ -153,7 +153,7 @@ def test_a_numeric_key_is_read_as_text() -> None:
     [
         ({"slot": "14.11.2026 18:00"}, "slot", "real date and time"),
         ({"slot": True}, "slot", "real date and time"),
-        ({"format": "story"}, "format", "must be one of: feed, carousel, reel"),
+        ({"format": "igtv"}, "format", "must be one of: feed, carousel, reel, story"),
         ({"account": None}, "account", "account is required"),
         ({"format": None}, "format", "format is required"),
         ({"cover_at_s": "soon"}, "cover_at_s", "must be a number"),

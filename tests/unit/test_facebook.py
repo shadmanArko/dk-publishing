@@ -284,3 +284,58 @@ def test_a_token_that_may_not_read_the_feed_can_still_confirm_a_post() -> None:
     # The fake refuses /feed reads exactly like the real Page does for this token.
     found = publisher.find_live(snap("post"), None)
     assert found is not None and found.external_id == "PAGE_1"
+
+
+# --- a photo album: several photos in one post ------------------------------------------------------
+
+
+def album_files(tmp_path: Path, n: int) -> list[Rendition]:
+    return [rendition(tmp_path, f"{i + 1:02d}.jpg", bytes([i]) * 10) for i in range(n)]
+
+
+def album_snap(n: int = 4, **more: Any) -> VariantSnapshot:
+    return snap("photo", media=tuple(f"{i + 1:02d}.jpg" for i in range(n)), **more)
+
+
+def test_several_photos_are_staged_hidden_and_then_posted_as_one_album(tmp_path: Path) -> None:
+    publisher, fake = build()
+    handle = publisher.prepare(album_snap(3, caption="Kacchi vs biryani"), album_files(tmp_path, 3))
+    assert len(handle["photo_ids"]) == 3
+    # staged photos are not visible: nothing is on the Page yet
+    assert fake.items["feed"] == [] and all(not p["published"] for p in fake.items["photos"])
+
+    live = publisher.publish(handle)
+    [post] = fake.items["feed"]
+    assert post["message"] == "Kacchi vs biryani" and live.external_id == post["id"]
+    assert all(p["published"] for p in fake.items["photos"])  # attaching made them visible
+    found = publisher.find_live(album_snap(3, caption="Kacchi vs biryani"), handle)
+    assert found is not None and found.external_id == live.external_id
+
+
+def test_a_single_photo_still_goes_up_the_old_way(tmp_path: Path) -> None:
+    publisher, fake = build()
+    handle = publisher.prepare(snap("photo", media=("a.jpg",)), [rendition(tmp_path, "a.jpg")])
+    assert "photo_ids" not in handle
+    publisher.publish(handle)
+    assert len(fake.items["photos"]) == 1 and fake.items["feed"] == []
+
+
+@pytest.mark.parametrize(
+    ("snapshot", "words"),
+    [
+        (album_snap(11), "at most 10 photos, not 11"),
+        (snap("photo", media=("a.jpg", "b.mp4")), "'b.mp4' is not a photo file"),
+        (snap("video", media=("a.mp4", "b.mp4")), "Only one video per post"),
+    ],
+)
+def test_album_limits_are_explained(snapshot: VariantSnapshot, words: str) -> None:
+    assert any(words in p.message for p in build()[0].validate(snapshot))
+
+
+def test_a_lost_answer_while_staging_is_a_plain_retry_and_posts_nothing(tmp_path: Path) -> None:
+    fake = FakeGraph()
+    publisher, _ = build(fake)
+    fake.fail_next(httpx.ReadTimeout("slow"))
+    with pytest.raises(Retryable):
+        publisher.prepare(album_snap(2), album_files(tmp_path, 2))
+    assert fake.items["feed"] == []

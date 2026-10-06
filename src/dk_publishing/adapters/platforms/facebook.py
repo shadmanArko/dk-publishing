@@ -9,6 +9,7 @@ Two ways to get a post out, chosen per row by `delivery`:
 
 from __future__ import annotations
 
+import json
 from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -17,12 +18,13 @@ from typing import Any
 from dk_publishing.adapters.platforms.meta import GraphClient
 from dk_publishing.application.ports import Handle
 from dk_publishing.domain.capabilities import Capabilities
-from dk_publishing.domain.errors import PublishingError, Rejected
+from dk_publishing.domain.errors import PublishingError, Rejected, Retryable, UnknownOutcome
 from dk_publishing.domain.publishing import LivePost, Rendition, VariantSnapshot, Violation
 
 MAX_CAPTION = 63_206
 MAX_VIDEO_BYTES = 1024**3  # one request; larger files need Meta's chunked upload
 MAX_PHOTO_BYTES = 10 * 1024**2
+MAX_ALBUM = 10  # photos in one album post
 VIDEO_TYPES = (".mp4", ".mov", ".m4v")
 PHOTO_TYPES = (".jpg", ".jpeg", ".png")
 FORMATS = ("post", "photo", "video")
@@ -100,7 +102,7 @@ class FacebookPublisher:
                         f"{Path(path).name} is {size / 1024**2:,.0f} MB; Facebook allows "
                         f"{limit / 1024**2:,.0f} MB in one upload"
                     )
-        return {
+        handle: dict[str, Any] = {
             "kind": fmt,
             "page_id": self._page,
             "tenant_id": snapshot.tenant_id,
@@ -109,6 +111,24 @@ class FacebookPublisher:
             "link": snapshot.content.get("link") or None,
             "files": paths,
         }
+        if fmt == "photo" and len(paths) > 1:
+            handle["photo_ids"] = self._stage_photos(paths)
+        return handle
+
+    def _stage_photos(self, paths: list[str]) -> list[str]:
+        """Upload each photo unpublished: nothing is visible until the album post attaches them.
+        A lost answer here leaves at worst a hidden photo, so it is a plain retry, not a doubt."""
+        ids: list[str] = []
+        for path in paths:
+            try:
+                with open(path, "rb") as handle_file:
+                    result = self._graph.post(
+                        f"{self._page}/photos", {"published": "false"}, file=("source", handle_file)
+                    )
+            except UnknownOutcome as exc:
+                raise Retryable(f"a photo upload did not finish ({exc}); trying again") from None
+            ids.append(str(result["id"]))
+        return ids
 
     # --- publish ---------------------------------------------------------------------------
 
@@ -150,6 +170,11 @@ class FacebookPublisher:
             data: dict[str, Any] = {"message": message, **hold}
             if handle.get("link"):
                 data["link"] = handle["link"]
+            return self._graph.post(f"{page}/feed", data)
+        if kind == "photo" and handle.get("photo_ids"):
+            data = {"message": message, **hold}
+            for index, photo_id in enumerate(handle["photo_ids"]):
+                data[f"attached_media[{index}]"] = json.dumps({"media_fbid": photo_id})
             return self._graph.post(f"{page}/feed", data)
         if kind in ("photo", "video") and files:
             with open(files[0], "rb") as handle_file:
@@ -198,7 +223,10 @@ class FacebookPublisher:
         edge, field = (
             ("videos", "description") if fmt == "video" else ("published_posts", "message")
         )
-        if fmt == "photo":
+        album = len(snapshot.content.get("media") or []) > 1
+        if (
+            fmt == "photo" and not album
+        ):  # an album's photos carry no caption: find its post instead
             edge, field = "photos", "name"
         params = {"fields": f"id,{field},created_time,permalink_url", "limit": "25"}
         if edge == "photos":
@@ -240,8 +268,9 @@ def _media_problems(fmt: str, names: list[str]) -> list[Violation]:
     wanted, kinds = ("video", VIDEO_TYPES) if fmt == "video" else ("photo", PHOTO_TYPES)
     if not names:
         return [Violation("media", f"A {wanted} post needs a {wanted} file in the media column.")]
-    if len(names) > 1:
+    if len(names) > 1 and fmt != "photo":
         return [Violation("media", f"Only one {wanted} per post is supported so far.")]
-    if not names[0].lower().endswith(kinds):
-        return [Violation("media", f"'{names[0]}' is not a {wanted} file ({', '.join(kinds)}).")]
-    return []
+    if len(names) > MAX_ALBUM:
+        return [Violation("media", f"An album holds at most {MAX_ALBUM} photos, not {len(names)}.")]
+    bad = [n for n in names if not n.lower().endswith(kinds)]
+    return [Violation("media", f"'{n}' is not a {wanted} file ({', '.join(kinds)}).") for n in bad]

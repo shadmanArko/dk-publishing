@@ -193,6 +193,7 @@ def test_dropdowns_offer_exactly_the_configured_choices(built: FakeSheets) -> No
         "feed",
         "carousel",
         "reel",
+        "story",
     ]
 
 
