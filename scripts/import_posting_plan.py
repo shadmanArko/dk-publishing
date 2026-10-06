@@ -15,12 +15,14 @@ from __future__ import annotations
 
 import argparse
 import sys
+import time
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 import openpyxl
+from googleapiclient.errors import HttpError
 
 from dk_publishing import composition as c
 from dk_publishing.adapters.config.platforms import load_platforms
@@ -150,6 +152,20 @@ def post_cells(e: Entry) -> dict[str, Any]:
     }
 
 
+def patiently(call: Any, *args: Any) -> None:
+    """Google allows 60 sheet writes a minute: pace the writes, and wait out a 'too fast' answer."""
+    for attempt in range(8):
+        try:
+            call(*args)
+            time.sleep(1.3)
+            return
+        except HttpError as exc:
+            if exc.status_code != 429:
+                raise
+            time.sleep(20 + 10 * attempt)
+    raise RuntimeError("Google kept refusing the writes as too fast")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("plan", type=Path)
@@ -185,13 +201,19 @@ def main() -> int:
     gateway = GoogleSheetGateway(
         sheets, sheet_id=env["GOOGLE_SHEET_ID"], layout=layout, platforms=platforms
     )
-    existing = {p.post_key for p in gateway.read().posts}
+    snapshot = gateway.read()
+    existing = {p.post_key for p in snapshot.posts}
+    has_platform_row = {(r.tab, r.post_key) for r in snapshot.rows}
     written = 0
     for e in sorted(entries, key=lambda x: x.number):
         if e.key in existing:
             continue
-        gateway.append_row(platforms[e.platform.lower()].tab, c._sample_cells(platform_cells(e)))
-        gateway.append_row("Posts", c._sample_cells(post_cells(e)))  # last: ticking ready approves
+        tab = platforms[e.platform.lower()].tab
+        if (tab, e.key) not in has_platform_row:  # never create a second row for the same post
+            patiently(gateway.append_row, tab, c._sample_cells(platform_cells(e)))
+        patiently(
+            gateway.append_row, "Posts", c._sample_cells(post_cells(e))
+        )  # last: ready=approval
         written += 1
     print(f"wrote {written} posts ({len(entries) - written} were already there)")
     return 0
