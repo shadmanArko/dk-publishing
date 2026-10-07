@@ -95,7 +95,7 @@ def _credentials(env: Mapping[str, str], platform: str) -> MetaCredentials:
     return MetaCredentials(one_file)
 
 
-def _public_media(env: Mapping[str, str]) -> PublicMediaStore | None:
+def public_media(env: Mapping[str, str]) -> PublicMediaStore | None:
     """Public links for media, available only where a web server serves PUBLIC_MEDIA_DIR."""
     directory = env.get("PUBLIC_MEDIA_DIR", "").strip()
     base = env.get("PUBLIC_MEDIA_BASE_URL", "").strip()
@@ -120,7 +120,7 @@ def _threads(
         video_host=THREADS_HOST,
     )
     return ThreadsPublisher(
-        user_id=user_id, capabilities=caps, graph=graph, public=_public_media(env)
+        user_id=user_id, capabilities=caps, graph=graph, public=public_media(env)
     )
 
 
@@ -146,7 +146,7 @@ def _instagram(
         capabilities=caps,
         graph=graph,
         version=version,
-        public=_public_media(env),
+        public=public_media(env),
     )
 
 

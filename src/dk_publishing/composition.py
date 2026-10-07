@@ -43,7 +43,7 @@ from dk_publishing.adapters.platforms.dk_file import (
     resolve_env,
 )
 from dk_publishing.adapters.platforms.dry_run import DryRunPublisher, PostgresLedger
-from dk_publishing.adapters.platforms.live import build_live_publisher
+from dk_publishing.adapters.platforms.live import build_live_publisher, public_media
 from dk_publishing.adapters.platforms.live_test import LiveTestResult, run_live_test
 from dk_publishing.adapters.platforms.meta_check import (
     MetaReport,
@@ -126,7 +126,7 @@ def build_services(
                     "not set up (docs/setup/telegram.md)"
                 )
             publishers[name] = build_assisted_publisher(
-                name, settings, notifier, PostgresSentLog(database_url)
+                name, settings, notifier, PostgresSentLog(database_url), public_media(env)
             )
             live = True  # the video is downloaded from Drive before it is handed over
         elif settings.mode is Mode.DRY_RUN:
@@ -459,7 +459,7 @@ def renew_tokens(env: Mapping[str, str]) -> RefreshResult | None:
     return meta_refresh(ref)
 
 
-def purge_public_media(env: Mapping[str, str], older_than: timedelta = timedelta(hours=6)) -> int:
+def purge_public_media(env: Mapping[str, str], older_than: timedelta = timedelta(hours=24)) -> int:
     """Remove public links nobody revoked (a run that died). 0 when none are configured."""
     directory, base = env.get("PUBLIC_MEDIA_DIR", "").strip(), env.get("PUBLIC_MEDIA_BASE_URL", "")
     if not directory or not base.strip():

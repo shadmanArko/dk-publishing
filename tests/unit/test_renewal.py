@@ -42,7 +42,7 @@ def test_public_links_nobody_revoked_are_swept_but_fresh_ones_stay(tmp_path: Pat
     for folder in (old, fresh):
         folder.mkdir(parents=True)
         (folder / "clip.mp4").write_bytes(b"x")
-    aged = time.time() - 8 * 3600
+    aged = time.time() - 30 * 3600
     os.utime(old, (aged, aged))
     env = {"PUBLIC_MEDIA_DIR": str(public), "PUBLIC_MEDIA_BASE_URL": "https://m.example"}
     assert composition.purge_public_media(env) == 1

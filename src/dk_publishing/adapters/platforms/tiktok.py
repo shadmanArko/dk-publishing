@@ -8,6 +8,7 @@ promotion), and they are shown on the card.
 
 from __future__ import annotations
 
+from dk_publishing.adapters.media.public import PublicMedia
 from dk_publishing.adapters.platforms.assisted import AssistedPublisher, SentLog
 from dk_publishing.application.ports import Notifier
 from dk_publishing.domain.capabilities import Capabilities
@@ -74,8 +75,11 @@ def _on(value: object) -> str:
 
 
 def build_tiktok(
-    capabilities: Capabilities, notifier: Notifier, sent: SentLog
+    capabilities: Capabilities,
+    notifier: Notifier,
+    sent: SentLog,
+    public: PublicMedia | None = None,
 ) -> AssistedPublisher:
     return AssistedPublisher(
-        rules=TikTokRules(), capabilities=capabilities, notifier=notifier, sent=sent
+        rules=TikTokRules(), capabilities=capabilities, notifier=notifier, sent=sent, public=public
     )

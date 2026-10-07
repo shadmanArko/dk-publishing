@@ -17,6 +17,7 @@ from datetime import datetime
 from html import escape
 from typing import Protocol
 
+from dk_publishing.adapters.media.public import PublicMedia
 from dk_publishing.application.ports import Handle, Notifier, NotifyError
 from dk_publishing.domain.capabilities import Capabilities
 from dk_publishing.domain.errors import Rejected, Retryable
@@ -29,8 +30,10 @@ from dk_publishing.domain.publishing import (
 )
 from dk_publishing.domain.timezones import utc_to_berlin
 
-# Telegram bots can send files up to 50 MB; a larger video is described instead of attached.
-ATTACH_LIMIT = 45 * 1024 * 1024
+# Telegram bots can send files up to 50 MB (the notifier's own limit is the same); a larger video is
+# offered as a temporary download link instead of being attached.
+ATTACH_LIMIT = 49 * 1024 * 1024
+LINK_HOURS = 24  # how long such a link stays valid (the sweeper removes older ones)
 
 
 class SentLog(Protocol):
@@ -58,7 +61,9 @@ class AssistedPublisher:
         capabilities: Capabilities,
         notifier: Notifier,
         sent: SentLog,
+        public: PublicMedia | None = None,
     ) -> None:
+        self._public = public
         self._rules = rules
         self._capabilities = capabilities
         self._notifier = notifier
@@ -78,13 +83,18 @@ class AssistedPublisher:
         path = media[0].path
         if not os.path.isfile(path):
             raise Rejected(f"{os.path.basename(path)} is missing, so it cannot be sent")
+        size = os.path.getsize(path)
+        link = self._public.expose(media[0]) if self._public and size > ATTACH_LIMIT else None
+        names = snapshot.content.get("media") or [{}]
+        name = str(names[0].get("name") or os.path.basename(path))  # the name people know it by
         return {
             "kind": "assisted",
             "tenant_id": snapshot.tenant_id,
             "variant_id": snapshot.variant_id,
             "file": path,
-            "name": os.path.basename(path),
-            "card": self._card(snapshot, os.path.basename(path), os.path.getsize(path)),
+            "name": name,
+            "link": link,
+            "card": self._card(snapshot, name, size, link),
         }
 
     def publish(self, handle: Handle) -> LivePost:
@@ -110,7 +120,7 @@ class AssistedPublisher:
 
     # --- the card --------------------------------------------------------------------------
 
-    def _card(self, snapshot: VariantSnapshot, name: str, size: int) -> str:
+    def _card(self, snapshot: VariantSnapshot, name: str, size: int, link: str | None) -> str:
         label = escape(self._rules.label)
         slot = _local(snapshot.publish_at)
         caption = str(snapshot.content.get("caption") or "").strip()
@@ -122,6 +132,12 @@ class AssistedPublisher:
             lines += ["", *[escape(s) for s in settings]]
         if size <= ATTACH_LIMIT:
             lines += ["", f"The video <i>{escape(name)}</i> follows in the next message."]
+        elif link:
+            lines += [
+                "",
+                f"<i>{escape(name)}</i> is too big for Telegram, so download it here "
+                f"(link valid {LINK_HOURS} hours):\n{escape(link)}",
+            ]
         else:
             lines += [
                 "",

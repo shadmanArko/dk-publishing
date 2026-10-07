@@ -246,3 +246,55 @@ def test_telegram_refusing_a_video_is_reported(tmp_path: Path) -> None:
     html = httpx.MockTransport(lambda r: httpx.Response(502, text="<html>"))
     with pytest.raises(NotifyError, match="502"):
         TelegramNotifier("t", "1", transport=html).send_video(str(file), "x")
+
+
+# --- a video that is too big for Telegram, and what the card calls the file ------------------------
+
+
+class FakePublic:
+    def __init__(self) -> None:
+        self.exposed: list[str] = []
+
+    def expose(self, rendition: Rendition) -> str:
+        self.exposed.append(rendition.path)
+        return "https://media.example/TOKEN/clip.mp4"
+
+    def revoke(self, url: str) -> None: ...
+
+
+def test_a_video_just_under_telegrams_limit_is_attached_not_linked(tmp_path: Path) -> None:
+    from dk_publishing.adapters.platforms.assisted import ATTACH_LIMIT
+
+    telegram, public = FakeNotifier(), FakePublic()
+    publisher = build_tiktok(CAPS, telegram, MemoryLog(), public)
+    big = tmp_path / "clip.mp4"
+    with big.open("wb") as handle:
+        handle.truncate(47_400_000)  # the 47.4 MB video that was wrongly left out once
+    assert ATTACH_LIMIT > 47_400_000
+    handle_ = publisher.prepare(snap(), [Rendition("original", str(big), "s")])
+    assert handle_["link"] is None and "follows in the next message" in handle_["card"]
+    assert public.exposed == []
+
+
+def test_a_video_too_big_for_telegram_gets_a_download_link(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(assisted, "ATTACH_LIMIT", 5)
+    telegram, public = FakeNotifier(), FakePublic()
+    publisher = build_tiktok(CAPS, telegram, MemoryLog(), public)
+    handle = publisher.prepare(snap(), video(tmp_path, size=50))
+    assert "https://media.example/TOKEN/clip.mp4" in handle["card"]
+    assert "valid 24 hours" in handle["card"] and "Drive media folder" not in handle["card"]
+    publisher.publish(handle)
+    assert telegram.videos == []  # not attached; the link is in the card
+
+
+def test_the_card_shows_the_name_people_know_not_the_cache_name(tmp_path: Path) -> None:
+    path = tmp_path / "effc8578a56db6c2ca58aafddee70cea-15_media.mp4"
+    path.write_bytes(b"x")
+    publisher = build()
+    handle = publisher.prepare(
+        snap(media=[{"name": "15_media.mp4"}]), [Rendition("original", str(path), "s")]
+    )
+    assert "15_media.mp4" in handle["card"] and "effc8578" not in handle["card"]
+    assert handle["name"] == "15_media.mp4"

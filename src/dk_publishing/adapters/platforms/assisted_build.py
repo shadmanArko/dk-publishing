@@ -3,14 +3,19 @@
 from __future__ import annotations
 
 from dk_publishing.adapters.config.platforms import ConfigError, PlatformSettings
+from dk_publishing.adapters.media.public import PublicMedia
 from dk_publishing.adapters.platforms.assisted import SentLog
 from dk_publishing.adapters.platforms.tiktok import build_tiktok
 from dk_publishing.application.ports import Notifier, Publisher
 
 
 def build_assisted_publisher(
-    name: str, settings: PlatformSettings, notifier: Notifier, sent: SentLog
+    name: str,
+    settings: PlatformSettings,
+    notifier: Notifier,
+    sent: SentLog,
+    public: PublicMedia | None = None,
 ) -> Publisher:
     if name == "tiktok":
-        return build_tiktok(settings.capabilities, notifier, sent)
+        return build_tiktok(settings.capabilities, notifier, sent, public)
     raise ConfigError(f"platform {name!r} is assisted but has no hand-over rules yet")
