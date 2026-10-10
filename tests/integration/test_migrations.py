@@ -25,6 +25,9 @@ EXPECTED_TABLES = {
     "channel_settings",
     "dry_run_posts",  # the rehearsal ledger; not one of the plan's eleven
     "alerts_sent",  # which Telegram alerts were delivered
+    "api_keys",  # HTTP API client keys (hash only)
+    "api_media",  # files sent through the API
+    "api_content",  # content of API drafts until they are approved
 }
 
 

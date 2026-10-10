@@ -11,7 +11,7 @@ set -euo pipefail
 # the usual command is just `deploy/deploy.sh` or `deploy/deploy.sh --secrets`. Values given on the
 # command line (host and domain first, then options) win over the file.
 CONF="$(cd "$(dirname "$0")" && pwd)/server.conf"
-SERVER=""; DOMAIN=""; SHARED_NETWORK=""; ACCOUNT_NAME=""
+SERVER=""; DOMAIN=""; SHARED_NETWORK=""; ACCOUNT_NAME=""; API_DOMAIN=""
 [ -f "$CONF" ] && . "$CONF"
 if [ $# -ge 2 ] && [[ "$1" != --* ]]; then SERVER="$1"; DOMAIN="$2"; shift 2; fi
 HOST="${SERVER:?no server: fill in deploy/server.conf or run deploy.sh user@server media-domain}"
@@ -55,7 +55,7 @@ fi
 
 echo "==> start"
 # printf %q keeps arguments with spaces intact when ssh joins them into one command line
-ssh "$HOST" "bash -s $(printf '%q ' "$DOMAIN" "$SHARED" "$ACCOUNT_NAME")" <<'REMOTE_SCRIPT'
+ssh "$HOST" "bash -s $(printf '%q ' "$DOMAIN" "$SHARED" "$ACCOUNT_NAME" "$API_DOMAIN")" <<'REMOTE_SCRIPT'
 set -euo pipefail
 cd /srv/dk/app/deploy
 [ -s /srv/dk/secrets/dk.json ] || { echo "no /srv/dk/secrets/dk.json yet: re-run with --secrets"; exit 1; }
@@ -63,7 +63,8 @@ if [ ! -f .env ]; then
   umask 077
   printf 'POSTGRES_PASSWORD=%s\n' "$(openssl rand -hex 24)" > .env
 fi
-sed -i '/^MEDIA_SITE=\|^COMPOSE_PROFILES=\|^DK_PROXY_NETWORK=/d' .env
+sed -i '/^MEDIA_SITE=\|^API_SITE=\|^COMPOSE_PROFILES=\|^DK_PROXY_NETWORK=/d' .env
+[ -z "$4" ] || printf 'API_SITE=%s\n' "$4" >> .env
 printf 'MEDIA_SITE=%s\n' "$1" >> .env
 if [ -n "$2" ]; then printf 'COMPOSE_PROFILES=shared\nDK_PROXY_NETWORK=%s\n' "$2" >> .env
 else printf 'COMPOSE_PROFILES=standalone\n' >> .env; fi

@@ -74,6 +74,12 @@ Short steps and a problem-to-fix table: [docs/setup/update-secrets.md](docs/setu
 Set `delivery` to `native` on Facebook/YouTube rows to let the platform hold the post itself
 ([why](docs/adr/0017-per-row-delivery-native-or-direct.md)).
 
+## Posting from other software (HTTP API)
+
+Another program or an AI agent can schedule posts through an HTTP API instead of the Sheet: it reads each
+platform's rules, uploads files, checks a post, and gets exact, machine-readable fixes when something is wrong.
+See [docs/api/README.md](docs/api/README.md).
+
 ## Switching a platform on
 
 Platforms are `dry_run` (rehearsal, posts nothing) until you set `mode: live` in

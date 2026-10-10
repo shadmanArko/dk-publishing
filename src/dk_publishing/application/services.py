@@ -1,16 +1,19 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 
 from dk_publishing.application.ports import (
     Clock,
     MediaCatalog,
+    MediaIntake,
     MediaStore,
+    Notifier,
     PublisherRegistry,
     SheetGateway,
     UnitOfWork,
 )
+from dk_publishing.domain.guide import PlatformGuide
 
 
 @dataclass(frozen=True, slots=True)
@@ -33,3 +36,15 @@ class SyncServices:
     platforms: Sequence[str]  # every platform key, so empty account lists get cleared too
     tenant_id: str = "dk"
     max_cancellations: int = 5  # more scheduled cancellations than this in one sync is a slip
+
+
+@dataclass(frozen=True, slots=True)
+class ApiServices:
+    """What the HTTP API needs: the publishing services plus the platform guides and file intake."""
+
+    core: Services
+    guides: Mapping[str, PlatformGuide]  # only the platforms that are switched on
+    modes: Mapping[str, str]  # platform -> live | assisted | dry_run
+    intake: MediaIntake
+    notifier: Notifier | None = None
+    tenant_id: str = "dk"

@@ -10,7 +10,11 @@ import pytest
 from dk_publishing.adapters.platforms.dk_file import TEMPLATE
 
 ROOT = Path(__file__).resolve().parents[2]
-PAGES = [ROOT / "README.md", *sorted((ROOT / "docs" / "setup").glob("*.md"))]
+PAGES = [
+    ROOT / "README.md",
+    ROOT / "docs" / "api" / "README.md",
+    *sorted((ROOT / "docs" / "setup").glob("*.md")),
+]
 
 
 @pytest.mark.parametrize("page", PAGES, ids=lambda p: p.name)

@@ -99,6 +99,7 @@ class SyncVariant:
     external_url: str | None
     external_id: str | None
     last_reason: str | None  # the reason on the variant's latest event
+    source: str = "human"  # who made the post: 'human' (the Sheet) or 'agent' (the API)
 
 
 class SheetGateway(Protocol):
@@ -111,6 +112,85 @@ class SheetGateway(Protocol):
 
 class MediaCatalog(Protocol):
     def list_files(self) -> list[MediaFile]: ...
+
+
+class DuplicateKey(Exception):
+    """An API key with this name is already in use."""
+
+
+@dataclass(frozen=True, slots=True)
+class ApiKey:
+    id: str
+    tenant_id: str
+    name: str
+    scopes: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class ApiKeyInfo:
+    name: str
+    scopes: tuple[str, ...]
+    created_at: datetime
+    last_used_at: datetime | None
+    revoked: bool
+
+
+@dataclass(frozen=True, slots=True)
+class UploadedMedia:
+    id: str
+    filename: str
+    sha256: str
+    size: int
+
+
+@dataclass(frozen=True, slots=True)
+class StoredPost:
+    id: str
+    post_key: str
+    label: str | None
+    source: str
+    request_hash: str | None
+    created_by: str | None
+
+
+class DuplicatePost(Exception):
+    """A post with this post_key already exists."""
+
+
+class ApiRepository(Protocol):
+    def add_key(self, tenant_id: str, name: str, key_hash: str, scopes: Sequence[str]) -> str:
+        """Returns the key id. Raises DuplicateKey."""
+
+    def key_by_hash(self, key_hash: str) -> ApiKey | None:
+        """The key, unless it was revoked."""
+
+    def keys(self, tenant_id: str) -> list[ApiKeyInfo]: ...
+
+    def revoke_key(self, tenant_id: str, name: str, at: datetime) -> bool: ...
+
+    def touch_key(self, key_id: str, at: datetime) -> None: ...
+
+    def add_media(
+        self, tenant_id: str, filename: str, sha256: str, size: int, created_by: str
+    ) -> str:
+        """Returns the media id."""
+
+    def media(self, tenant_id: str, ids: Sequence[str]) -> dict[str, UploadedMedia]:
+        """The known ones among `ids`, by id."""
+
+    def post(self, tenant_id: str, post_key: str) -> StoredPost | None: ...
+
+    def create_post(
+        self, tenant_id: str, post_key: str, label: str | None, request_hash: str, created_by: str
+    ) -> str:
+        """A new post with source 'agent'. Returns its id. Raises DuplicatePost."""
+
+    def posts(self, tenant_id: str, limit: int) -> list[StoredPost]:
+        """Posts made through the API, newest first."""
+
+    def save_content(self, tenant_id: str, variant_id: str, content: Mapping[str, Any]) -> None: ...
+
+    def content(self, variant_id: str) -> Mapping[str, Any] | None: ...
 
 
 class DuplicateAttempt(Exception):
@@ -281,7 +361,45 @@ class AlertRepository(Protocol):
         """Approved or held variants with a slot in [start, end), earliest first."""
 
 
+@dataclass(frozen=True, slots=True)
+class StoredFile:
+    filename: str  # a safe file name that keeps the extension
+    sha256: str
+    size: int
+
+
+class IntakeRejected(Exception):
+    """An uploaded or fetched file was refused. `code` is stable, `message` is for people."""
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code
+        self.message = message
+
+
+class UploadWriter(Protocol):
+    def write(self, chunk: bytes) -> None:
+        """Raises IntakeRejected when the file is too big."""
+
+    def finish(self) -> StoredFile: ...
+
+    def abort(self) -> None: ...
+
+
+class MediaIntake(Protocol):
+    """Where files sent through the API are kept, so a post can name them by id."""
+
+    def begin(self, filename: str) -> UploadWriter:
+        """Raises IntakeRejected if the file type is not one any platform takes."""
+
+    def fetch(self, url: str, filename: str | None) -> StoredFile:
+        """Download a public https file. Raises IntakeRejected."""
+
+
 class UnitOfWork(Protocol):
+    @property
+    def api(self) -> ApiRepository: ...
+
     @property
     def alerts(self) -> AlertRepository: ...
 

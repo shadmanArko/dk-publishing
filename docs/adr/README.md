@@ -16,3 +16,4 @@ Each file records one decision so a later change argues against the original rea
 | 10 | [SOPS and age for app secrets; AES-GCM in Postgres for tokens](0010-sops-and-age-for-app-secrets-aes-gcm-in-postgres.md) |
 | 11 | [Assisted mode as a full Publisher](0011-assisted-mode-as-a-full-publisher.md) |
 | 12 | [Default run launcher in one code-location container; own Dagster instance (option A)](0012-default-run-launcher-in-one-code-location-contai.md) |
+| 20 | [An HTTP API for other software, over the same engine](0020-http-api-for-other-software.md) |

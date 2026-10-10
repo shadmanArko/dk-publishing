@@ -7,6 +7,7 @@ dependencies = [
     "dagster>=1.13.24",
     "dagster-postgres>=0.29.24",
     "dagster-webserver>=1.13.24",
+    "fastapi>=0.115",
     "google-api-python-client>=2.201.0",
     "google-auth>=2.59.1",
     "google-auth-oauthlib>=1.5.0",
@@ -14,6 +15,7 @@ dependencies = [
     "psycopg[binary]>=3.2",
     "pyyaml>=6.0.3",
     "tzdata>=2026.4",
+    "uvicorn>=0.30",
 ]
 
 [project.scripts]

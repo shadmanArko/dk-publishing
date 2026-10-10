@@ -110,3 +110,11 @@
 - **Nightly login check** (`token_health`, 03:45 Berlin): `composition.health_failures` = the `[FAIL]` lines of `check-setup`;
   `use_cases/health.py` sends them once per day per distinct set. It exists because Meta silently dropped permissions from a
   non-expiring token. Anything that makes `check-setup` fail will page the owner nightly, so keep that command quiet when healthy.
+- **HTTP API** (ADR 0020, `entrypoints/publish_api`, `application/use_cases/api_posts.py`): a thin FastAPI shell over the
+  same use cases. Do NOT add `from __future__ import annotations` to `app.py` (FastAPI reads annotations at runtime).
+  API posts have `posts.source = 'agent'`; the Sheet sync must never cancel/edit them (it filters on `SyncVariant.source`).
+  A draft has no snapshot, so the submitted content is kept in `api_content` until `approve` freezes it. `post_key` is the
+  idempotency key (`posts.request_hash`). Platform limits are stated once in `adapters/platforms/guides.py` from the adapters'
+  constants, and `tests/unit/test_guides.py` proves them against the real `validate`: a new platform or format needs a guide,
+  and a platform without one is simply not offered. Keys are stored as SHA-256; scopes read < draft < approve. Uploaded
+  files live in `<MEDIA_DIR>/uploads/<sha256>-<name>` and the media store routes `media_id` items there.

@@ -16,3 +16,8 @@
 		respond "Not found" 404
 	}
 }
+
+# The HTTP API (docs/api/README.md). Only if API_SITE is set; the placeholder never matches a real host.
+{$API_SITE:api.invalid} {
+	reverse_proxy api:8000
+}

@@ -5,6 +5,10 @@
 }
 
 :80 {
+	@api host {$API_SITE:api.invalid}
+	handle @api {
+		reverse_proxy api:8000
+	}
 	root * /srv/public
 	handle /tiktok/callback {
 		header Content-Type "text/plain; charset=utf-8"

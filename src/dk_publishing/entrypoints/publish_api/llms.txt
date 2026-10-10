@@ -1,0 +1,100 @@
+# DK Publishing API
+
+Schedule social posts (Instagram, Facebook, Threads, YouTube, TikTok) from software. You describe
+each post per platform; the service validates it, keeps it as a draft until a person approves it
+(unless your key may approve), publishes it at the slot, and reports the result. A post is never
+published twice.
+
+## Use it in four calls
+
+1. Learn the rules (do this first, and again if a post is refused)
+   GET /v1/platforms            every platform, its formats, limits, options, connected accounts
+   GET /v1/platforms/{name}     one platform
+
+2. Upload each file once, then refer to it by id
+   POST /v1/media?filename=reel.mp4        body = the file's bytes        -> {"media_id": "..."}
+   POST /v1/media   {"url": "https://...", "filename": "reel.mp4"}   (public https link; we download it)
+
+3. Check a post without creating anything
+   POST /v1/posts/validate      same body as POST /v1/posts  -> {"valid": true} or {"valid": false, "problems": [...]}
+
+4. Create it
+   POST /v1/posts               -> 201 with the post and where each platform stands
+   GET  /v1/posts/{post_key}    status (poll, or just check later)
+
+Authentication: header `Authorization: Bearer dkp_...` on every /v1 call. The owner issues keys with
+one of three rights: read < draft < approve. Draft keys create posts that wait for a person.
+
+## A post
+
+POST /v1/posts
+{
+  "post_key": "eid-2026-reel-1",          your own unique id; sending it again is safe (see "Repeating")
+  "label": "Eid reel",                    optional, internal
+  "approve": false,                       false (default) = draft for a person to approve
+  "variants": [                           one entry per platform (and account)
+    {
+      "platform": "instagram",
+      "format": "reel",
+      "caption": "Slow-cooked for Eid.",
+      "media": ["<media_id>"],
+      "slot": "2026-10-12T19:30:00+02:00",   when to publish: ISO 8601 WITH a UTC offset (or Z)
+      "options": {"share_to_feed": true}     the format's extra fields, from GET /v1/platforms
+    },
+    {
+      "platform": "youtube",
+      "format": "video",
+      "media": ["<media_id>"],
+      "slot": "2026-10-12T17:30:00Z",
+      "options": {"title": "Dum biryani in 40 seconds", "made_for_kids": "no"}
+    }
+  ]
+}
+
+Rules of thumb (the authoritative, current numbers are always in GET /v1/platforms):
+- Each platform has its own formats, caption limit, media count and file types. YouTube has no
+  caption: use options.title and options.description. TikTok needs options.privacy_level.
+- One variant per platform+account. Omit "account" when only one is connected.
+- The slot must be at least a minute ahead. Times without an offset are refused.
+- Unknown fields are refused, so a typo is caught instead of silently ignored.
+
+## Errors teach you what to change
+
+Failures are RFC 9457 `application/problem+json`. Validation failures list EVERY problem at once:
+
+{
+  "status": 422, "title": "The request has problems", "detail": "...nothing was created.",
+  "problems": [
+    {"path": "variants[0].caption", "code": "too_long", "limit": 2200, "actual": 2410,
+     "message": "Caption is 2,410 characters; Instagram allows 2,200."},
+    {"path": "variants[1].options.privacy_level", "code": "not_allowed",
+     "allowed": ["public", "friends", "followers", "only_me"], "message": "..."}
+  ],
+  "examples": {"variants[0]": {"platform": "instagram", "format": "reel", "...": "a valid variant"}}
+}
+
+`path` points into your request. Fix the listed fields and send again. Codes: invalid_post_key,
+required, too_long, not_allowed, unknown_platform, unknown_format, unknown_option, unknown_account,
+account_required, unknown_media, media_rejected (see `expected`), invalid_slot, slot_in_past,
+slot_too_far, duplicate_variant, post_key_taken, unsupported_type, too_large, bad_url.
+
+Other statuses: 401 no/invalid key, 403 the key lacks the right, 404 unknown post, 409 conflict.
+
+## Repeating a request
+
+post_key is the idempotency key. Send the same post_key with the same content again (after a
+timeout, say) and you get the existing post back with 200 and `Idempotent-Replay: true`; nothing is
+created twice. The same post_key with different content is 409 post_key_taken: to change a post,
+cancel it and submit a new post_key.
+
+## States
+
+Each variant has a `state`: awaiting_approval, scheduled, publishing, checking, published, failed,
+invalid, cancelled, expired. `live_url` appears once published. On some platforms (see `mode` in
+GET /v1/platforms) a post is handed to a person on Telegram to publish by hand: `handed_over` is true.
+
+## Approving and cancelling
+
+POST   /v1/posts/{post_key}/approve   (needs the approve right) approve every draft of the post
+DELETE /v1/posts/{post_key}           cancel everything that has not gone out; published
+                                      or in-flight variants are left and reported as a conflict

@@ -6,6 +6,7 @@ from typing import Any, Self
 import psycopg
 
 from dk_publishing.adapters.persistence.alerts import PostgresAlertRepository
+from dk_publishing.adapters.persistence.api import PostgresApiRepository
 from dk_publishing.adapters.persistence.attempts import PostgresAttemptRepository
 from dk_publishing.adapters.persistence.sync import PostgresSyncRepository
 from dk_publishing.adapters.persistence.variants import PostgresVariantRepository
@@ -14,6 +15,7 @@ from dk_publishing.adapters.persistence.variants import PostgresVariantRepositor
 class PostgresUnitOfWork:
     """One connection, one transaction. Nothing persists unless `commit()` is called."""
 
+    api: PostgresApiRepository
     alerts: PostgresAlertRepository
     variants: PostgresVariantRepository
     attempts: PostgresAttemptRepository
@@ -25,6 +27,7 @@ class PostgresUnitOfWork:
 
     def __enter__(self) -> Self:
         self._conn = psycopg.connect(self._conninfo, options="-c timezone=UTC")
+        self.api = PostgresApiRepository(self._conn)
         self.alerts = PostgresAlertRepository(self._conn)
         self.variants = PostgresVariantRepository(self._conn)
         self.attempts = PostgresAttemptRepository(self._conn)

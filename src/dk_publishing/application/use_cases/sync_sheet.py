@@ -111,13 +111,18 @@ def sync_sheet(sync: SyncServices, *, allow_cancellations: bool = False) -> Sync
     unique_posts, duplicate_keys = _index_posts(snapshot.posts)
     with core.uow() as uow:
         accounts = uow.sync.accounts(tenant)
+        # Posts made through the API belong to the API: the Sheet neither cancels nor edits them,
+        # and a Sheet row that reuses one of their keys is told why it is ignored.
+        api_owned = {v.post_key for v in uow.sync.variants(tenant) if v.source != "human"}
+        unique_posts = {k: p for k, p in unique_posts.items() if k not in api_owned}
         for post in unique_posts.values():
             uow.sync.upsert_post(tenant, post.post_key, post.title)
         uow.commit()
-        existing = uow.sync.variants(tenant)
+        everything = uow.sync.variants(tenant)
 
+    existing = [v for v in everything if v.source == "human"]
     desired = [
-        _desire(row, unique_posts, duplicate_keys, accounts, files, core, now, tenant)
+        _desire(row, unique_posts, duplicate_keys | api_owned, accounts, files, core, now, tenant)
         for row in snapshot.rows
     ]
     ambiguous = _ambiguous(desired)
@@ -188,7 +193,11 @@ def _desire(
     problems = list(row.problems)
     if row.post_key in duplicate_keys:
         problems.append(
-            Violation("post_key", f"post_key '{row.post_key}' appears more than once on Posts.")
+            Violation(
+                "post_key",
+                f"post_key '{row.post_key}' appears more than once on Posts, or is already "
+                "used by a post made through the API.",
+            )
         )
     elif row.post_key and post is None:
         problems.append(
@@ -457,7 +466,7 @@ def _status_plan(
             post_key=v.post_key,
             title=v.title or "",
             status=v.variant.status.value,
-            source="human",
+            source="agent" if v.source == "agent" else "human",
         )
         for v in variants
         if v.variant.status in CALENDAR_STATES

@@ -62,10 +62,18 @@ services:
     ports:
       - "127.0.0.1:${DK_UI_PORT:-3000}:3000"   # reachable only from the server itself: use an SSH tunnel to look at it
 
+  api:
+    <<: *app
+    command: ["dk", "api", "serve", "--host", "0.0.0.0", "--port", "8000"]
+    # No published port: Caddy (the `media` service, or the standalone one) forwards the API domain
+    # here, so HTTPS and routing stay in one place.
+
   media:
     image: caddy:2
     profiles: ["shared"]
     restart: unless-stopped
+    environment:
+      API_SITE: ${API_SITE:-api.invalid}
     volumes:
       - ./Caddyfile.internal:/etc/caddy/Caddyfile:ro
       - public:/srv/public:ro
@@ -81,6 +89,7 @@ services:
     restart: unless-stopped
     environment:
       MEDIA_SITE: ${MEDIA_SITE}
+      API_SITE: ${API_SITE:-api.invalid}
     ports:
       - "${DK_HTTP_PORT:-80}:80"
       - "${DK_HTTPS_PORT:-443}:443"

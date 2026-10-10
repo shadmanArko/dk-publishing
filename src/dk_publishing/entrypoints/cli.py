@@ -96,6 +96,26 @@ def _run(argv: Sequence[str] | None = None) -> int:
     add.add_argument(
         "--external-id", help="the platform's own account id (see the platform's docs)"
     )
+    api = commands.add_parser("api", help="the HTTP API: keys, approvals, server")
+    api_commands = api.add_subparsers(dest="api_command", required=True)
+    key = api_commands.add_parser("key-create", help="make a key for a client (shown once)")
+    key.add_argument("name", help="who the key is for, e.g. content-agent")
+    key.add_argument(
+        "--right",
+        choices=["read", "draft", "approve"],
+        default="draft",
+        help="draft (default): may create posts that wait for you; approve: may publish directly",
+    )
+    api_commands.add_parser("keys", help="list keys")
+    revoke = api_commands.add_parser("key-revoke", help="stop a key working")
+    revoke.add_argument("name")
+    approve = api_commands.add_parser(
+        "approve", help="approve a post a client submitted as a draft"
+    )
+    approve.add_argument("post_key")
+    serve = api_commands.add_parser("serve", help="run the API server")
+    serve.add_argument("--host", default="127.0.0.1")
+    serve.add_argument("--port", type=int, default=8000)
     rehearsal = commands.add_parser(
         "seed-rehearsal", help="create approved dry-run posts a few minutes from now"
     )
@@ -134,6 +154,8 @@ def _run(argv: Sequence[str] | None = None) -> int:
 
     if args.command == "alerts":
         return _alerts(database_url, args.what)
+    if args.command == "api":
+        return _api(args, database_url)
     if args.command == "migrate":
         applied = composition.migrate_database(database_url)
         print("\n".join(f"applied {name}" for name in applied) or "already up to date")
@@ -388,6 +410,54 @@ def _telegram(command: str) -> int:
         return 1
     print("\n".join(result.lines))
     return 0 if result.ok else 1
+
+
+def _api(args: argparse.Namespace, database_url: str) -> int:
+    from dk_publishing.application.ports import DuplicateKey
+    from dk_publishing.application.use_cases.api_posts import ApiError
+
+    command = args.api_command
+    if command == "serve":
+        import uvicorn
+
+        uvicorn.run(
+            "dk_publishing.entrypoints.publish_api.main:build_app",
+            factory=True,
+            host=args.host,
+            port=args.port,
+        )
+        return 0
+    if command == "key-create":
+        try:
+            key = composition.create_api_key(database_url, args.name, args.right)
+        except DuplicateKey:
+            print(
+                f"[FAIL] a key called '{args.name}' already exists; revoke it first",
+                file=sys.stderr,
+            )
+            return 1
+        print(f"Key for '{args.name}' ({args.right}). Copy it now, it cannot be shown again:\n")
+        print(key)
+        return 0
+    if command == "keys":
+        for info in composition.list_api_keys(database_url):
+            used = f"{info.last_used_at:%Y-%m-%d %H:%M}" if info.last_used_at else "never"
+            state = "revoked" if info.revoked else "active"
+            print(f"{info.name:24} {','.join(info.scopes):10} {state:8} last used: {used}")
+        return 0
+    if command == "key-revoke":
+        done = composition.revoke_api_key(database_url, args.name)
+        print("revoked" if done else f"no active key called '{args.name}'")
+        return 0 if done else 1
+    try:
+        post = composition.approve_api_post(database_url, _env(), args.post_key)
+    except ApiError as exc:
+        print(f"[FAIL] {exc.message}", file=sys.stderr)
+        for problem in exc.problems:
+            print(f"  {problem.path}: {problem.message}", file=sys.stderr)
+        return 1
+    print(f"{post.post_key}: {post.summary}")
+    return 0
 
 
 def _alerts(database_url: str, what: str) -> int:

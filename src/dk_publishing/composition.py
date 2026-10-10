@@ -17,6 +17,11 @@ from dk_publishing.adapters.config.sheet_layout import load_sheet_layout
 from dk_publishing.adapters.media.drive_catalog import DriveCatalog, sheet_modified_time
 from dk_publishing.adapters.media.drive_store import DriveMediaStore, GoogleDriveDownloader
 from dk_publishing.adapters.media.public import PublicMediaStore
+from dk_publishing.adapters.media.uploads import (
+    DEFAULT_MAX_BYTES,
+    CompositeMediaStore,
+    UploadStore,
+)
 from dk_publishing.adapters.notify.telegram import (
     DEFAULT_PATH as DEFAULT_TELEGRAM_PATH,
 )
@@ -43,6 +48,7 @@ from dk_publishing.adapters.platforms.dk_file import (
     resolve_env,
 )
 from dk_publishing.adapters.platforms.dry_run import DryRunPublisher, PostgresLedger
+from dk_publishing.adapters.platforms.guides import GUIDES
 from dk_publishing.adapters.platforms.live import build_live_publisher, public_media
 from dk_publishing.adapters.platforms.live_test import LiveTestResult, run_live_test
 from dk_publishing.adapters.platforms.meta_check import (
@@ -73,12 +79,14 @@ from dk_publishing.adapters.sheets.google_access import (
 from dk_publishing.adapters.sheets.sheet_init import POSTS, InitReport, initialise
 from dk_publishing.application.ports import (
     AccountInfo,
+    ApiKeyInfo,
     DuplicateAccount,
     Notifier,
     Publisher,
     UnitOfWork,
 )
-from dk_publishing.application.services import Services, SyncServices
+from dk_publishing.application.services import ApiServices, Services, SyncServices
+from dk_publishing.application.use_cases.api_posts import PostView
 from dk_publishing.application.use_cases.approve import approve
 from dk_publishing.application.use_cases.results import RunResult
 from dk_publishing.domain.model import Actor, ActorKind
@@ -146,14 +154,20 @@ def build_services(
     )
 
 
-def _media_store(env: Mapping[str, str]) -> DriveMediaStore:
+def media_folder(env: Mapping[str, str]) -> Path:
+    return Path(env.get("MEDIA_DIR", "").strip() or DEFAULT_MEDIA_DIR).expanduser()
+
+
+def _media_store(env: Mapping[str, str]) -> CompositeMediaStore:
     """Where live platforms get their files: downloaded from Drive into MEDIA_DIR."""
     key = env.get("GOOGLE_APPLICATION_CREDENTIALS", "").strip()
     if not key:
         raise ConfigError("a live platform needs GOOGLE_APPLICATION_CREDENTIALS to fetch media")
     _, drive, _, _ = connect(Path(key).expanduser())
-    folder = Path(env.get("MEDIA_DIR", "").strip() or DEFAULT_MEDIA_DIR).expanduser()
-    return DriveMediaStore(GoogleDriveDownloader(drive), folder)
+    folder = media_folder(env)
+    return CompositeMediaStore(
+        DriveMediaStore(GoogleDriveDownloader(drive), folder), UploadStore(folder)
+    )
 
 
 def _rehearsal_services(database_url: str) -> Services:
@@ -495,3 +509,61 @@ def health_failures(env: Mapping[str, str]) -> list[str]:
     except Exception as exc:  # the watchman must never crash on what it is watching
         return [f"the nightly check itself failed ({type(exc).__name__}); run `make check-setup`"]
     return [line for line in report.lines if line.startswith("[FAIL]")]
+
+
+def build_api_services(
+    database_url: str,
+    env: Mapping[str, str],
+    platforms_config: Path = DEFAULT_PLATFORMS_CONFIG,
+    transport: httpx.BaseTransport | None = None,
+    tenant_id: str = "dk",
+) -> ApiServices:
+    """The HTTP API's services: the same publishing services, plus the platform guides (only for
+    platforms that are switched on) and the place uploaded files are kept."""
+    settings = load_platforms(platforms_config)
+    modes = {
+        name: s.mode.value
+        for name, s in settings.items()
+        if s.mode is not Mode.OFF and name in GUIDES
+    }
+    try:
+        limit = int(env.get("API_MAX_UPLOAD_MB", "") or 0) * 1024**2 or DEFAULT_MAX_BYTES
+    except ValueError:
+        raise ConfigError("API_MAX_UPLOAD_MB must be a whole number of megabytes") from None
+    return ApiServices(
+        core=build_services(database_url, platforms_config, env, transport),
+        guides={name: GUIDES[name] for name in modes},
+        modes=modes,
+        intake=UploadStore(media_folder(env), max_bytes=limit),
+        notifier=build_notifier(env, transport),
+        tenant_id=tenant_id,
+    )
+
+
+def _api_core(database_url: str) -> Services:
+    return build_alert_services(database_url)  # database and clock only; no platform is touched
+
+
+def create_api_key(database_url: str, name: str, scope: str, tenant_id: str = "dk") -> str:
+    from dk_publishing.application.use_cases.api_keys import create_key
+
+    return create_key(_api_core(database_url), tenant_id, name, scope)
+
+
+def list_api_keys(database_url: str, tenant_id: str = "dk") -> list[ApiKeyInfo]:
+    from dk_publishing.application.use_cases.api_keys import list_keys
+
+    return list_keys(_api_core(database_url), tenant_id)
+
+
+def revoke_api_key(database_url: str, name: str, tenant_id: str = "dk") -> bool:
+    from dk_publishing.application.use_cases.api_keys import revoke_key
+
+    return revoke_key(_api_core(database_url), tenant_id, name)
+
+
+def approve_api_post(database_url: str, env: Mapping[str, str], post_key: str) -> PostView:
+    """The owner approves a post a client submitted as a draft."""
+    from dk_publishing.application.use_cases.api_posts import approve_post
+
+    return approve_post(build_api_services(database_url, env), post_key, actor_name="owner")

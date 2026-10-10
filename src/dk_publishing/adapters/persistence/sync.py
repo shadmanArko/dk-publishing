@@ -53,7 +53,9 @@ class PostgresSyncRepository:
             """INSERT INTO publishing.posts (tenant_id, post_key, title, source)
                VALUES (%s, %s, %s, 'human')
                ON CONFLICT (tenant_id, post_key)
-               DO UPDATE SET title = EXCLUDED.title, updated_at = now()
+               DO UPDATE SET title = CASE WHEN publishing.posts.source = 'human'
+                                          THEN EXCLUDED.title ELSE publishing.posts.title END,
+                             updated_at = now()
                RETURNING id::text""",
             (tenant_id, post_key, title or None),
         ).fetchone()
@@ -67,7 +69,8 @@ class PostgresSyncRepository:
                       p.post_key, p.title, a.display_name, v.source_hash, v.external_url,
                       v.external_id,
                       (SELECT e.reason FROM publishing.variant_events e
-                        WHERE e.variant_id = v.id ORDER BY e.seq DESC LIMIT 1)
+                        WHERE e.variant_id = v.id ORDER BY e.seq DESC LIMIT 1),
+                      p.source
                FROM publishing.variants v
                JOIN publishing.posts p ON p.tenant_id = v.tenant_id AND p.id = v.post_id
                JOIN publishing.social_accounts a
@@ -96,6 +99,7 @@ class PostgresSyncRepository:
                 external_url=r[13],
                 external_id=r[14],
                 last_reason=r[15],
+                source=r[16],
             )
             for r in rows
         ]
