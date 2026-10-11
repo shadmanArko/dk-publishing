@@ -231,6 +231,24 @@ def test_a_good_post_validates_and_creates_nothing(rig: Rig) -> None:
     assert rig.call("GET", "/v1/posts", "read").json() == {"posts": []}
 
 
+def test_a_json_body_without_a_json_label_is_still_read(rig: Rig) -> None:
+    import json
+
+    body = json.dumps(rig.reel())
+    for label in (None, "application/x-www-form-urlencoded"):
+        headers = {"Authorization": f"Bearer {rig.keys['draft']}"}
+        if label:
+            headers["Content-Type"] = label
+        response = rig.client.post("/v1/posts/validate", content=body, headers=headers)
+        assert response.status_code == 200 and response.json() == {"valid": True}, label
+    broken = rig.client.post(
+        "/v1/posts/validate",
+        content="not json",
+        headers={"Authorization": f"Bearer {rig.keys['draft']}"},
+    )
+    assert broken.status_code == 422
+
+
 def test_a_too_long_caption_says_the_limit_and_the_overshoot_and_shows_an_example(rig: Rig) -> None:
     body = rig.reel()
     body["variants"][0]["caption"] = "x" * 2410

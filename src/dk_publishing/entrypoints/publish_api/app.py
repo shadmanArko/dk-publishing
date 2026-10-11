@@ -55,6 +55,35 @@ class _Unauthorized(Exception):
     pass
 
 
+JSON_BODY_PATHS = ("/v1/posts", "/v1/posts/validate")
+GUESSED_TYPES = (b"", b"application/x-www-form-urlencoded", b"text/plain")
+
+
+class _JsonByDefault:
+    """`curl -d` sends form-urlencoded and hand-written clients often send nothing. The post
+    endpoints only ever take JSON, so treat those labels as JSON. Media uploads are untouched
+    (their body is raw bytes), and a body that is not JSON still gets the usual 422."""
+
+    def __init__(self, app: Any) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
+        if (
+            scope["type"] == "http"
+            and scope["method"] == "POST"
+            and scope["path"].rstrip("/") in JSON_BODY_PATHS
+        ):
+            headers = scope["headers"]
+            kind = next((v for k, v in headers if k == b"content-type"), b"")
+            if kind.split(b";")[0].strip().lower() in GUESSED_TYPES:
+                scope = {
+                    **scope,
+                    "headers": [(k, v) for k, v in headers if k != b"content-type"]
+                    + [(b"content-type", b"application/json")],
+                }
+        await self.app(scope, receive, send)
+
+
 # --- request bodies ---------------------------------------------------------------------------
 
 
@@ -207,6 +236,8 @@ def create_app(api: ApiServices) -> FastAPI:
             "Every error says what to fix. Plain-text guide for agents: GET /llms.txt."
         ),
     )
+
+    app.add_middleware(_JsonByDefault)
 
     def caller(request: Request) -> ApiKey:
         header = request.headers.get("authorization", "")

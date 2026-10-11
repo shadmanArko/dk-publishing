@@ -32,7 +32,7 @@ curl -s -H "Authorization: Bearer $KEY" -X POST --data-binary @reel.mp4 "$API/v1
 #    -> {"media_id": "3f2a...", ...}
 
 # 3. the post: one request, several platforms
-curl -s -H "Authorization: Bearer $KEY" -X POST $API/v1/posts -d '{
+curl -s -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" -X POST $API/v1/posts -d '{
   "post_key": "eid-reel-1",
   "variants": [
     {"platform": "instagram", "format": "reel", "caption": "Slow-cooked for Eid.",
@@ -43,6 +43,9 @@ curl -s -H "Authorization: Bearer $KEY" -X POST $API/v1/posts -d '{
   ]
 }'
 ```
+
+Send `Content-Type: application/json` when you can. The post endpoints also read a JSON body that arrives
+with no label or with curl's default form label.
 
 ## What a refusal looks like (this is the point)
 

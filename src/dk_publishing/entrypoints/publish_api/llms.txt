@@ -22,6 +22,8 @@ published twice.
    POST /v1/posts               -> 201 with the post and where each platform stands
    GET  /v1/posts/{post_key}    status (poll, or just check later)
 
+Send JSON bodies with `Content-Type: application/json` (a missing or form label is tolerated on /v1/posts).
+
 Authentication: header `Authorization: Bearer dkp_...` on every /v1 call. The owner issues keys with
 one of three rights: read < draft < approve. Draft keys create posts that wait for a person.
 
