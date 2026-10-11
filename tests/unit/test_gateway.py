@@ -255,21 +255,37 @@ def test_an_error_that_looks_like_a_formula_is_stored_as_text() -> None:
     )  # RAW: Sheets will not evaluate it
 
 
+def calendar_row(fake: FakeGoogle, index: int = 0) -> list[Any]:
+    """The Calendar row `index` as it is in the Sheet after the writes in `fake` (blank boxes
+    read back as FALSE, as Google returns them)."""
+    header = TABS["Calendar"]
+    row: list[Any] = [None] * len(header)
+    for update in fake.updates:
+        match = re.fullmatch(r"'Calendar'!([A-Z]+)2", update["range"])
+        assert match
+        column = sum((ord(c) - 64) * 26**n for n, c in enumerate(reversed(match.group(1)))) - 1
+        row[column] = update["values"][index][0]
+    return row
+
+
 def test_the_calendar_is_rewritten_only_when_it_differs() -> None:
     entry = CalendarEntry(NOW, "instagram", "Main", "DK-1", "Eid", "approved", "human")
     gw, fake = gateway(blank())
     gw.read()
     gw.write(StatusPlan(calendar=[entry]))
-    assert fake.clears == ["'Calendar'!A2:AZ1000"]
-    [block] = [u for u in fake.updates if u["range"] == "'Calendar'!A2"]
-    assert block["values"][0][:2] == [
+    cleared = {re.match(r"'Calendar'!([A-Z]+)2", c).group(1) for c in fake.clears}  # type: ignore[union-attr]
+    names = TABS["Calendar"]
+    assert len(cleared) == len(names) - 2  # every column except the two tick boxes
+    row = calendar_row(fake)
+    assert row[:2] == [
         pytest.approx(local_to_serial(datetime(2026, 11, 14, 12, 0))),
         "instagram",
     ]
+    assert row[names.index("approve")] is False and row[names.index("reject")] is False
 
     # the same calendar already in the Sheet: no clear, no write
     g = blank()
-    g["Calendar"].append(block["values"][0])
+    g["Calendar"].append(row)
     gw2, fake2 = gateway(g)
     gw2.read()
     assert (
@@ -402,11 +418,24 @@ def test_unticked_boxes_reading_back_as_false_do_not_make_the_calendar_look_chan
     g, fake = gateway(grids)
     g.read()
     g.write(StatusPlan(calendar=[entry]))
-    [block] = [u for u in fake.updates if u["range"] == "'Calendar'!A2"]
-    row = list(block["values"][0])
-    row[TABS["Calendar"].index("approve")] = False  # what Google returns for a blank checkbox
-    row[TABS["Calendar"].index("reject")] = False
-    grids["Calendar"].append(row)
+    grids["Calendar"].append(calendar_row(fake))  # boxes read back as FALSE
     g2, fake2 = gateway(grids)
     g2.read()
     assert g2.write(StatusPlan(calendar=[entry])) == 0 and fake2.clears == []
+
+
+def test_tick_boxes_are_never_cleared_only_set_back_to_unticked() -> None:
+    entry = CalendarEntry(NOW, "instagram", "Main", "DK-1", "Eid", "awaiting_approval", "agent")
+    grids = blank()
+    put(grids, "Calendar", post_key="OLD", platform="instagram", account="Main", approve=True)
+    g, fake = gateway(grids)
+    g.read()
+    g.write(StatusPlan(calendar=[entry]))
+    letters = {n: chr(ord("A") + TABS["Calendar"].index(n)) for n in ("approve", "reject")}
+    assert not any(
+        re.match(rf"'Calendar'!({'|'.join(letters.values())})2:", c) for c in fake.clears
+    )
+    for name, letter in letters.items():
+        [reset] = [u for u in fake.updates if u["range"] == f"'Calendar'!{letter}2"]
+        assert all(v == [False] for v in reset["values"]), name  # every row, so no tick can move
+        assert len(reset["values"]) == LAYOUT.rows - 1

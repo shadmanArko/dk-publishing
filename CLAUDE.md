@@ -126,3 +126,5 @@
   by date (`source`, `by`, `note`); agent posts waiting for a person get `approve`/`reject` checkboxes that the sync reads
   and clears by rewriting the tab. Unticked boxes read back as `FALSE`: `gateway._norm` treats that as empty, keep it, or a
   no-op sync writes forever. New Calendar columns need `dk sheet init` on the live Sheet (old Sheets just lack the feature).
+- **Never `values.clear` a checkbox column** (found on the live Sheet): it removes the boxes. The Calendar rewrite clears
+  its system columns one by one and writes FALSE into `approve`/`reject`; extra columns people add are left alone.

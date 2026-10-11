@@ -20,7 +20,10 @@ Sheet as before. Approval had to be `dk api approve` or an `approve`-right key.
   `approve` use case as every other approval (validated, frozen, hashed, actor `sheet`); a slot that has passed is
   refused like `dk api approve`. Reject cancels. Row matching is by `(post_key, platform, account)` columns, so
   sorting or filtering the Calendar is safe.
-- **The tab is regenerated every sync**, so ticks are cleared by the rewrite. An unticked box reads back as `FALSE`;
+- **The tab is regenerated every sync**, column by column, but the two tick columns are never cleared: Google stores a
+  tick box's unticked state as the value FALSE, so clearing the cells removes the boxes (found on the live Sheet). They
+  are set back to FALSE for every row instead, because rows move when the Calendar is rewritten and a leftover tick
+  must never land on another post. An unticked box reads back as `FALSE`;
   the comparison treats it as empty so a no-op sync still writes 0 cells (the loop trap in CLAUDE.md).
 - **Old Sheets keep working.** The Calendar is not a required tab: without the new columns nothing is read or written
   for them. `dk sheet init` appends the columns on the right.

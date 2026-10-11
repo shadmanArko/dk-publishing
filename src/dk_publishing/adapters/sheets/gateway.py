@@ -27,6 +27,7 @@ from dk_publishing.domain.timezones import local_to_serial, serial_to_local, utc
 
 COMMON = {"post_key", "enabled", "account", "caption", "slot"}
 SPAN = "AZ"  # columns read per tab
+TICKS = ("approve", "reject")  # Calendar tick boxes a person fills in
 
 
 class SheetReadError(Exception):
@@ -224,9 +225,7 @@ class GoogleSheetGateway:
         if plan.calendar is not None:
             matrix = self._calendar_matrix(plan)
             if _differs(matrix, self._existing.get(CALENDAR, [])[1:]):
-                clears.append(f"'{CALENDAR}'!A2:{SPAN}{self._layout.rows}")
-                if matrix:
-                    data.append({"range": f"'{CALENDAR}'!A2", "values": matrix})
+                self._write_calendar(matrix, data, clears)
         if plan.accounts is not None:
             self._account_lists(plan.accounts, data, clears)
 
@@ -249,6 +248,29 @@ class GoogleSheetGateway:
                 data.append(
                     {"range": f"'{tab}'!{col_letter(index[name])}{row}", "values": [[value]]}
                 )
+
+    def _write_calendar(
+        self, matrix: list[list[Any]], data: list[dict[str, Any]], clears: list[str]
+    ) -> None:
+        """Rewrite the Calendar's system columns, one column at a time. The approve and reject
+        columns are never cleared (clearing a tick box removes the box): they are set back to
+        unticked instead, for every row, because rows move when the Calendar is rewritten and a
+        leftover tick must never land on a different post."""
+        index = self._headers.get(CALENDAR) or {}
+        for name, i in index.items():
+            letter = col_letter(i)
+            if name in TICKS:
+                data.append(
+                    {
+                        "range": f"'{CALENDAR}'!{letter}2",
+                        "values": [[False] for _ in range(self._layout.rows - 1)],
+                    }
+                )
+                continue
+            clears.append(f"'{CALENDAR}'!{letter}2:{letter}{self._layout.rows}")
+            column = [[line[i] if i < len(line) else ""] for line in matrix]
+            if column and any(cell != "" for (cell,) in column):
+                data.append({"range": f"'{CALENDAR}'!{letter}2", "values": column})
 
     def _calendar_matrix(self, plan: StatusPlan) -> list[list[Any]]:
         index = self._headers.get(CALENDAR)
