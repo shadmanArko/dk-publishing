@@ -6,7 +6,7 @@ Written 2026-10-11 (end of the second session) for the next Claude Code session.
 into chat; tell them to edit files or use their own terminal.
 
 Start the new session in: `/Users/shadman.arko/Documents/Work_DoNotTouch/Dhaka Kacchi/dk-publishing`
-(git branch `main`, last commit is the webhooks commit (built and tested, **NOT deployed yet**: `make deploy` applies migration 0010); this file is tracked since commit `98462c0`; keep it updated).
+(git branch `main`, last commits: webhooks (deployed, migration 0010 applied) and the JSON-label fix for `/v1/webhooks`; this file is tracked since commit `98462c0`; keep it updated).
 
 ## The project in one paragraph
 `dk-publishing` is a business-agnostic social publishing pipeline for Dhaka Kacchi (a food business, Berlin):
@@ -29,7 +29,7 @@ It runs on the owner's Contabo VPS (`13.140.191.102`, shared with their live ord
 | Guides | `docs/guides/01-post-with-the-sheet.md` (humans) and `02-api-for-developers-and-agents.md` (developers/agents), PDFs in `docs/guides/pdf/` (`make guides`) |
 | Docs stay true | `docs/CHANGE-MAP.md` + `tests/unit/test_docs_in_sync.py` (fails `make check` when guides, `llms.txt`, Sheet text or PDFs drift from the code) |
 | Server disk | 42% (was 66%): ran `docker builder prune` (freed ~22 GB); `deploy.sh` now prunes cache older than 24 h each deploy. ~26 GB of old unused Docker images remain: do NOT prune without asking (may be the ordering system's) |
-| Webhooks (ADR 0023) | **built, tested, committed; not deployed.** `/v1/webhooks` (register/list/delete/deliveries/ping), signed at-least-once delivery from a separate Dagster run (`send_webhooks`, sensor `webhook_delivery`), `dk api webhooks` / `dk api webhook-disable`. Guide 02 section 5b documents it. After deploy: ping a real receiver end to end |
+| Webhooks (ADR 0023) | **live and verified end to end** (2026-10-11: registered a receiver, `ping` 200, a rejected draft produced a signed `post.cancelled` delivered on attempt 1; test key and webhook removed). `/v1/webhooks` (register/list/delete/deliveries/ping), signed at-least-once delivery from a separate Dagster run (`send_webhooks`, sensor `webhook_delivery`), `dk api webhooks` / `dk api webhook-disable`. Guide 02 section 5b documents it |
 | Tests | 1157 passed, 97% coverage |
 
 ## What the owner can do now (so you can answer questions)
@@ -45,11 +45,10 @@ It runs on the owner's Contabo VPS (`13.140.191.102`, shared with their live ord
    account back to public; delete test posts on platforms; old `invalid` rows `DK-TEST-1/-3/-YT-1` are harmless leftovers.
 3. **Which new platform?** LinkedIn / X / Reddit: wait for the answer; do not start building without it.
 4. **Performance report** (views/likes/reach by platform, format, time). Offered, unanswered; do it after a few more days of data.
-5. **Deploy the webhooks** (migration 0010 + new Dagster job/sensor), then verify live: register a receiver with a throwaway key, `POST /v1/webhooks/{id}/ping`, create and reject a draft, confirm the messages and the delivery log. Revoke the test key afterwards.
-6. Not built: editing a post in place (cancel and resubmit today), per-key rate limiting (reverse proxy), MCP wrapper for agents,
+5. Not built: editing a post in place (cancel and resubmit today), per-key rate limiting (reverse proxy), MCP wrapper for agents,
    token vault, TikTok/LinkedIn/X/Reddit adapters. Known limits: DNS-rebinding window in the URL fetcher (ADR 0020).
-7. Verify the TikTok hand-over card fix (videos up to 49 MiB attached, else a 24 h download link) on a slot.
-8. Optional: let the owner decide about `docker image prune` (26 GB) if disk climbs again.
+6. Verify the TikTok hand-over card fix (videos up to 49 MiB attached, else a 24 h download link) on a slot.
+7. Optional: let the owner decide about `docker image prune` (26 GB) if disk climbs again.
 
 ## Decisions on record (do not re-litigate)
 - **Approval stays in two places:** the owner's own Sheet posts via `ready` (Posts tab); agent posts via Calendar ticks. The owner
@@ -75,7 +74,7 @@ It runs on the owner's Contabo VPS (`13.140.191.102`, shared with their live ord
   `publish.dhakakacchi.com` to `dk-media:80`. Always back it up, `caddy validate`, then reload.
 
 ## Rules learned the hard way (also in CLAUDE.md)
-- Migrations are forward-only: never edit an applied one (`0009_media_retention.sql` is the latest APPLIED on the server; `0010_webhooks.sql` is not applied yet, so it may still be corrected until the next deploy). Every unique key must include `tenant_id` (a test enforces it).
+- Migrations are forward-only: never edit an applied one (`0010_webhooks.sql` is the latest, applied on the server). Every unique key must include `tenant_id` (a test enforces it).
 - Never run `down -v` or anything that resets a database holding live tokens/publish state.
 - Do NOT add `from __future__ import annotations` to Dagster `jobs.py`/`sensors.py` or the API `app.py`.
 - Platform names appear only in `adapters/platforms/`, `config/` (a test enforces this).
