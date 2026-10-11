@@ -19,9 +19,16 @@ from pydantic import BaseModel, ConfigDict, Field
 from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from dk_publishing.application.ports import ApiKey, IntakeRejected, StoredFile
+from dk_publishing.application.ports import (
+    ApiKey,
+    IntakeRejected,
+    StoredFile,
+    WebhookDelivery,
+    WebhookEndpoint,
+)
 from dk_publishing.application.services import ApiServices
 from dk_publishing.application.use_cases import api_keys
+from dk_publishing.application.use_cases import webhooks as hooks
 from dk_publishing.application.use_cases.api_media import register_media
 from dk_publishing.application.use_cases.api_posts import (
     ApiError,
@@ -140,6 +147,16 @@ class PostIn(BaseModel):
     )
 
 
+class WebhookIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    url: str = Field(description="Where to send messages. https only, a public host.")
+    events: list[str] = Field(
+        default_factory=list,
+        description="Which events you want, e.g. post.published. Leave empty for all of them.",
+    )
+
+
 class MediaFromUrl(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -173,6 +190,37 @@ def post_json(view: PostView) -> dict[str, Any]:
     for variant in data["variants"]:
         variant["slot"] = variant["slot"].isoformat()
     return cast(dict[str, Any], _clean(data))
+
+
+def endpoint_json(e: WebhookEndpoint) -> dict[str, Any]:
+    return _clean_dict(
+        {
+            "id": e.id,
+            "url": e.url,
+            "events": list(e.events) or "all",
+            "active": e.active,
+            "disabled_reason": e.disabled_reason,
+            "created_at": e.created_at.isoformat(),
+        }
+    )
+
+
+def delivery_json(d: WebhookDelivery) -> dict[str, Any]:
+    return _clean_dict(
+        {
+            "event_id": d.event_id,
+            "type": d.event_type,
+            "status": d.status,
+            "attempts": d.attempts,
+            "http_status": d.last_status,
+            "error": d.last_error,
+            "next_attempt_at": d.next_attempt_at.isoformat()
+            if d.status == "pending" and d.next_attempt_at
+            else None,
+            "created_at": d.created_at.isoformat() if d.created_at else None,
+            "delivered_at": d.delivered_at.isoformat() if d.delivered_at else None,
+        }
+    )
 
 
 def _field_json(f: FieldGuide) -> dict[str, Any]:
@@ -406,6 +454,38 @@ def create_app(api: ApiServices) -> FastAPI:
     @app.delete("/v1/posts/{post_key}", summary="Cancel everything that has not gone out")
     def cancel(post_key: str, key: Drafter) -> dict[str, Any]:
         return post_json(cancel_post(api, post_key, actor_name=key.name))
+
+    # webhooks ----------------------------------------------------------------------------
+
+    @app.post("/v1/webhooks", status_code=201, summary="Get messages when your posts change state")
+    def add_webhook(body: WebhookIn, key: Drafter) -> dict[str, Any]:
+        endpoint, secret = hooks.register_endpoint(api, key, body.url, body.events)
+        return {
+            **endpoint_json(endpoint),
+            "secret": secret,
+            "note": "Save the secret now: it signs every message and is not shown again.",
+        }
+
+    @app.get("/v1/webhooks", summary="Your webhooks (the secret is never shown again)")
+    def list_webhooks(key: Reader) -> dict[str, Any]:
+        return {"webhooks": [endpoint_json(e) for e in hooks.list_endpoints(api, key)]}
+
+    @app.delete("/v1/webhooks/{endpoint_id}", summary="Stop sending to this webhook")
+    def delete_webhook(endpoint_id: str, key: Drafter) -> dict[str, Any]:
+        hooks.delete_endpoint(api, key, endpoint_id)
+        return {"deleted": True}
+
+    @app.get("/v1/webhooks/{endpoint_id}/deliveries", summary="The latest messages and their fate")
+    def webhook_deliveries(endpoint_id: str, key: Reader) -> dict[str, Any]:
+        found = hooks.list_deliveries(api, key, endpoint_id)
+        return {"deliveries": [delivery_json(d) for d in found]}
+
+    @app.post("/v1/webhooks/{endpoint_id}/ping", summary="Send a test message now")
+    def ping_webhook(endpoint_id: str, key: Drafter) -> dict[str, Any]:
+        result = hooks.ping(api, key, endpoint_id)
+        return _clean_dict(
+            {"delivered": result.ok, "http_status": result.http_status, "error": result.error}
+        )
 
     return app
 

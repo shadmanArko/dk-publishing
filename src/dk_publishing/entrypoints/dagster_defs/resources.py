@@ -8,6 +8,7 @@ from dk_publishing import composition
 from dk_publishing.application.ports import Notifier
 from dk_publishing.application.services import Services, SyncServices
 from dk_publishing.application.use_cases.media_retention import PurgeResult
+from dk_publishing.application.use_cases.webhooks import DeliveryReport
 
 
 class ServicesResource(ConfigurableResource):  # type: ignore[type-arg]
@@ -85,3 +86,15 @@ class NotifyResource(ConfigurableResource):  # type: ignore[type-arg]
 
     def heartbeat(self) -> bool | None:
         return composition.ping_alive(composition.environment())
+
+
+class WebhookResource(ConfigurableResource):  # type: ignore[type-arg]
+    """Sends the messages API clients asked for (ADR 0023). Telegram is optional."""
+
+    database_url: str
+
+    def has_work(self) -> bool:
+        return composition.webhooks_have_work(self.database_url)
+
+    def deliver(self) -> DeliveryReport:
+        return composition.deliver_webhooks(self.database_url, composition.environment())

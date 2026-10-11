@@ -23,12 +23,14 @@ from dk_publishing.entrypoints.dagster_defs.jobs import (
     publish_variant_job,
     reconcile_variant_job,
     schedule_native_job,
+    send_webhooks,
     sync_sheet_job,
 )
 from dk_publishing.entrypoints.dagster_defs.resources import (
     NotifyResource,
     ServicesResource,
     SheetSyncResource,
+    WebhookResource,
 )
 
 BATCH = 50
@@ -96,6 +98,24 @@ def sheet_changed(
         return
     context.update_cursor(modified)
     yield RunRequest(run_key=f"sync:{modified}", tags={"dk/sync": "sheet"})
+
+
+@sensor(
+    job=send_webhooks,
+    minimum_interval_seconds=30,
+    default_status=DefaultSensorStatus.RUNNING,
+)
+def webhook_delivery(
+    context: SensorEvaluationContext, hooks: WebhookResource
+) -> Iterator[RunRequest | SkipReason]:
+    """Start a run only when a client has something to hear (a due message, or a state change not
+    queued yet). Runs carry the `dk/webhooks` tag, which allows one at a time, so they queue."""
+    if not hooks.has_work():
+        yield SkipReason("no webhook messages due")
+        return
+    bucket = int(context.cursor or 0) + 1
+    context.update_cursor(str(bucket))
+    yield RunRequest(run_key=f"webhooks:{bucket}", tags={"dk/webhooks": "send"})
 
 
 @sensor(minimum_interval_seconds=60, default_status=DefaultSensorStatus.RUNNING)

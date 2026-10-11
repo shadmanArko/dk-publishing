@@ -80,6 +80,15 @@ adapters themselves (a test checks every guide example against the real validati
 - **Typos are caught.** Unknown fields and unknown options are refused, not ignored.
 - **Times need an offset.** `2026-10-12T19:30:00+02:00` or `...Z`. A bare time is ambiguous and refused.
 
+## Webhooks
+
+Instead of polling, a client can register an https address and receive a signed message when a post is approved,
+published, failed, expired, cancelled or needs checking: `POST /v1/webhooks`, `GET /v1/webhooks`,
+`DELETE /v1/webhooks/{endpoint_id}`, `GET /v1/webhooks/{endpoint_id}/deliveries`, `POST /v1/webhooks/{endpoint_id}/ping`.
+Delivery is at least once with retries; the full contract, the signature check and code are in
+[guide 02](../guides/02-api-for-developers-and-agents.md) (section 5b) and ADR 0023. The owner uses
+`dk api webhooks` and `dk api webhook-disable ID`.
+
 ## Files on the server
 
 Uploads are kept only while a post needs them: a week after a post is finished (published, cancelled, failed) its
@@ -113,5 +122,4 @@ Only a hash of the key is stored. On the server, run these with
 
 ## Not in this version
 
-Webhooks (tell the caller when a post is published), editing a post in place (cancel and resubmit), and an MCP
-wrapper for AI agents. Today a caller polls `GET /v1/posts/{post_key}`.
+Editing a post in place (cancel and resubmit), per-key rate limits and an MCP wrapper for AI agents.

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from types import TracebackType
 from typing import Any, Protocol, Self, runtime_checkable
 
@@ -203,6 +203,147 @@ class ApiRepository(Protocol):
     def save_content(self, tenant_id: str, variant_id: str, content: Mapping[str, Any]) -> None: ...
 
     def content(self, variant_id: str) -> Mapping[str, Any] | None: ...
+
+
+@dataclass(frozen=True, slots=True)
+class WebhookEndpoint:
+    id: str
+    key_id: str
+    key_name: str
+    url: str
+    events: tuple[str, ...]  # empty: every event
+    active: bool
+    disabled_reason: str | None
+    created_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class WebhookDelivery:
+    """One message to send (or one already sent, when read back for the owner)."""
+
+    id: str
+    endpoint_id: str
+    url: str
+    secret: str
+    event_id: str
+    event_type: str
+    payload: Mapping[str, Any]
+    attempts: int
+    status: str = "pending"
+    last_status: int | None = None
+    last_error: str | None = None
+    next_attempt_at: datetime | None = None
+    created_at: datetime | None = None
+    delivered_at: datetime | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class WebhookCandidate:
+    """A state change an endpoint has not been told about yet."""
+
+    endpoint_id: str
+    variant_id: str
+    seq: int
+    event_type: str
+    at: datetime
+    post_key: str
+    platform: str
+    account: str
+    format: str | None
+    status: str
+    slot: datetime
+    live_url: str | None
+    reason: str | None
+    handed_over: bool
+
+
+class WebhookRepository(Protocol):
+    def add_endpoint(
+        self, tenant_id: str, key_id: str, url: str, secret: str, events: Sequence[str]
+    ) -> WebhookEndpoint: ...
+
+    def endpoints(self, tenant_id: str, key_id: str | None = None) -> list[WebhookEndpoint]:
+        """All endpoints, or one key's. Newest first. The secret is never returned."""
+
+    def endpoint_secret(
+        self, tenant_id: str, key_id: str, endpoint_id: str
+    ) -> tuple[str, str] | None:
+        """(url, secret) of one of the key's own live endpoints, for a test message."""
+
+    def delete_endpoint(self, tenant_id: str, key_id: str, endpoint_id: str) -> bool: ...
+
+    def disable_endpoint(self, endpoint_id: str, reason: str) -> bool: ...
+
+    def candidates(self, tenant_id: str, since: datetime, limit: int) -> list[WebhookCandidate]:
+        """Events of live API posts that a live endpoint of the creating key should hear about,
+        newer than both `since` and the endpoint itself, and not yet queued."""
+
+    def queue(
+        self,
+        tenant_id: str,
+        candidate: WebhookCandidate,
+        event_id: str,
+        payload: Mapping[str, Any],
+        at: datetime,
+    ) -> bool:
+        """Queue one message. False if it was already queued (the producer may run twice)."""
+
+    def claim_due(self, now: datetime, limit: int, lease: timedelta) -> list[WebhookDelivery]:
+        """Messages due now, leased for `lease` so a second worker cannot send them at the same
+        time. A claimed message that is never resolved becomes due again after the lease."""
+
+    def has_due(self, now: datetime) -> bool: ...
+
+    def record_attempt(
+        self,
+        delivery_id: str,
+        at: datetime,
+        *,
+        ok: bool,
+        http_status: int | None,
+        error: str | None,
+        retry_at: datetime | None,
+    ) -> None:
+        """Success: delivered. Failure: pending again at `retry_at`, or dead when it is None."""
+
+    def deliveries(
+        self, tenant_id: str, key_id: str, endpoint_id: str, limit: int
+    ) -> list[WebhookDelivery]: ...
+
+
+class WebhookUrlRejected(Exception):
+    """A webhook address that must not be called. `code` is stable, `message` is for people."""
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code
+        self.message = message
+
+
+@dataclass(frozen=True, slots=True)
+class SendResult:
+    ok: bool
+    http_status: int | None = None
+    error: str | None = None  # short, never contains the address or any part of the body
+    gone: bool = False  # HTTP 410: the client says it will never listen again
+
+
+class WebhookSender(Protocol):
+    def check(self, url: str) -> None:
+        """Raises WebhookUrlRejected unless the address is https and only public hosts answer it."""
+
+    def send(
+        self,
+        url: str,
+        secret: str,
+        *,
+        delivery_id: str,
+        event_id: str,
+        event_type: str,
+        body: bytes,
+        now: datetime,
+    ) -> SendResult:
+        """One signed POST, no redirects. Never raises for a failed delivery: it returns it."""
 
 
 class DuplicateAttempt(Exception):
@@ -447,6 +588,9 @@ class MediaIntake(Protocol):
 class UnitOfWork(Protocol):
     @property
     def api(self) -> ApiRepository: ...
+
+    @property
+    def webhooks(self) -> WebhookRepository: ...
 
     @property
     def alerts(self) -> AlertRepository: ...

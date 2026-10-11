@@ -10,6 +10,7 @@ from dk_publishing.adapters.persistence.api import PostgresApiRepository
 from dk_publishing.adapters.persistence.attempts import PostgresAttemptRepository
 from dk_publishing.adapters.persistence.sync import PostgresSyncRepository
 from dk_publishing.adapters.persistence.variants import PostgresVariantRepository
+from dk_publishing.adapters.persistence.webhooks import PostgresWebhookRepository
 
 
 class PostgresUnitOfWork:
@@ -20,6 +21,7 @@ class PostgresUnitOfWork:
     variants: PostgresVariantRepository
     attempts: PostgresAttemptRepository
     sync: PostgresSyncRepository
+    webhooks: PostgresWebhookRepository
 
     def __init__(self, conninfo: str) -> None:
         self._conninfo = conninfo
@@ -32,6 +34,7 @@ class PostgresUnitOfWork:
         self.variants = PostgresVariantRepository(self._conn)
         self.attempts = PostgresAttemptRepository(self._conn)
         self.sync = PostgresSyncRepository(self._conn)
+        self.webhooks = PostgresWebhookRepository(self._conn)
         return self
 
     def __exit__(

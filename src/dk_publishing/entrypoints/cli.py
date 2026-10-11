@@ -109,6 +109,9 @@ def _run(argv: Sequence[str] | None = None) -> int:
     api_commands.add_parser("keys", help="list keys")
     revoke = api_commands.add_parser("key-revoke", help="stop a key working")
     revoke.add_argument("name")
+    api_commands.add_parser("webhooks", help="list every webhook clients registered")
+    hook_off = api_commands.add_parser("webhook-disable", help="stop sending to one webhook")
+    hook_off.add_argument("id", help="the id shown by `dk api webhooks`")
     approve = api_commands.add_parser(
         "approve", help="approve a post a client submitted as a draft"
     )
@@ -431,6 +434,13 @@ def _media(database_url: str, *, dry_run: bool) -> int:
     return 0
 
 
+def _host(url: str) -> str:
+    """Only the host: an address may carry a secret in its path or query."""
+    from urllib.parse import urlparse
+
+    return urlparse(url).hostname or "?"
+
+
 def _api(args: argparse.Namespace, database_url: str) -> int:
     from dk_publishing.application.ports import DuplicateKey
     from dk_publishing.application.use_cases.api_posts import ApiError
@@ -464,6 +474,18 @@ def _api(args: argparse.Namespace, database_url: str) -> int:
             state = "revoked" if info.revoked else "active"
             print(f"{info.name:24} {','.join(info.scopes):10} {state:8} last used: {used}")
         return 0
+    if command == "webhooks":
+        found = composition.list_webhooks(database_url)
+        for hook in found:
+            state = "active" if hook.active else f"OFF ({hook.disabled_reason})"
+            wanted = ",".join(hook.events) or "all events"
+            print(f"{hook.id}  {hook.key_name:20} {state:10} {wanted}  {_host(hook.url)}")
+        print(f"{len(found)} webhook(s)" if found else "no webhooks registered")
+        return 0
+    if command == "webhook-disable":
+        done = composition.disable_webhook(database_url, args.id, "Disabled by the owner.")
+        print("disabled" if done else "no active webhook with that id")
+        return 0 if done else 1
     if command == "key-revoke":
         done = composition.revoke_api_key(database_url, args.name)
         print("revoked" if done else f"no active key called '{args.name}'")

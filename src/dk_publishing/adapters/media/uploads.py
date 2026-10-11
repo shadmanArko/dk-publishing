@@ -8,16 +8,15 @@ a name like `../../x` can never leave the folder, and what was approved is exact
 from __future__ import annotations
 
 import hashlib
-import ipaddress
 import re
-import socket
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 from urllib.parse import unquote, urljoin, urlparse
 
 import httpx
 
+from dk_publishing.adapters.net import Resolver, is_public, resolve_host
 from dk_publishing.application.ports import IntakeRejected, MediaStore, StoredFile, UploadWriter
 from dk_publishing.domain.errors import Rejected
 from dk_publishing.domain.publishing import Rendition
@@ -26,25 +25,10 @@ from dk_publishing.domain.publishing import Rendition
 ALLOWED = (".jpg", ".jpeg", ".png", ".mp4", ".mov", ".m4v", ".webm", ".avi", ".mkv")
 DEFAULT_MAX_BYTES = 512 * 1024**2
 MAX_REDIRECTS = 3
-Resolver = Callable[[str], Sequence[str]]
 
 
 def safe_name(name: str) -> str:
     return re.sub(r"[^A-Za-z0-9._-]", "_", Path(name).name) or "file"
-
-
-def resolve_host(host: str) -> list[str]:
-    try:
-        return sorted(
-            {str(i[4][0]) for i in socket.getaddrinfo(host, 443, type=socket.SOCK_STREAM)}
-        )
-    except OSError:
-        return []
-
-
-def _public(address: str) -> bool:
-    ip = ipaddress.ip_address(address)
-    return ip.is_global and not ip.is_multicast
 
 
 class _Writer:
@@ -166,7 +150,7 @@ class UploadStore:
         if parts.scheme != "https" or not parts.hostname:
             raise IntakeRejected("bad_url", "Only https links are accepted.")
         addresses = self._resolver(parts.hostname)
-        if not addresses or not all(_public(a) for a in addresses):
+        if not addresses or not all(is_public(a) for a in addresses):
             raise IntakeRejected(
                 "bad_url", "The link does not point to a public address on the internet."
             )

@@ -123,7 +123,7 @@ curl -s -H "Authorization: Bearer $KEY" $API/v1/posts/eid-2026-reel-1
 curl -s -H "Authorization: Bearer $KEY" $API/v1/posts          # all API posts, newest first
 ```
 
-Poll gently (once a minute is plenty). Per variant, `state` is one of:
+Poll gently (once a minute is plenty), or use a webhook (section 5b). Per variant, `state` is one of:
 
 | state | Meaning |
 | --- | --- |
@@ -256,6 +256,101 @@ Each is one variant. Put it inside `"variants": [ ... ]`. Replace `MEDIA_ID` wit
 `delivery: "native"` makes Facebook or YouTube hold the post and publish it themselves (the slot must be at least 10
 minutes ahead). Default `direct` = this server publishes at the slot.
 
+## 5b. Webhooks: let the server call you (instead of polling)
+
+Instead of asking "is it published yet?" every minute, give us an address and **we send you a message when a post
+changes state**. It is optional; polling still works.
+
+**1. Register an address** (a `draft` key; the address must be `https` and a public host):
+
+```bash
+curl -s -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" -X POST $API/v1/webhooks \
+  -d '{"url": "https://agent.example.com/dk-hooks", "events": ["post.published", "post.failed"]}'
+# -> {"id": "...", "url": "...", "events": [...], "active": true, "secret": "whsec_...", "note": "Save the secret now..."}
+```
+
+**Save the `secret` now**: it signs every message and is never shown again (leave `events` out to get all of them).
+A key may have 3 webhooks. List yours with `GET /v1/webhooks`, remove one with `DELETE /v1/webhooks/{endpoint_id}`.
+
+**2. Test it** (sends one signed message right now and tells you what your server answered):
+
+```bash
+curl -s -H "Authorization: Bearer $KEY" -X POST $API/v1/webhooks/ENDPOINT_ID/ping
+# -> {"delivered": true, "http_status": 200}
+```
+
+**3. What you receive**: `POST` to your address with a JSON body
+
+```json
+{
+  "id": "evt_5f0c..._4",
+  "type": "post.published",
+  "created_at": "2026-12-20T18:30:12+00:00",
+  "data": {
+    "post_key": "eid-2026-reel-1", "variant_id": "5f0c...", "platform": "instagram",
+    "account": "Dhaka Kacchi", "format": "reel", "state": "published", "status": "published",
+    "slot": "2026-12-20T18:30:00+00:00", "live_url": "https://www.instagram.com/p/...",
+    "handed_over": false, "reason": "published"
+  }
+}
+```
+
+| Event | When |
+| --- | --- |
+| `post.approved` | The owner approved it (it is scheduled) |
+| `post.published` | It is live. `data.live_url` is set (TikTok: `handed_over: true`, the owner posts it by hand) |
+| `post.failed` | It did not go out. `data.reason` says why |
+| `post.expired` | It missed its slot and was too late to publish safely |
+| `post.needs_check` | The outcome is uncertain and the server is verifying it. **Do not resend the post** |
+| `post.cancelled` | Cancelled by you, or **rejected by the owner** in the Sheet (`data.reason` says which) |
+| `post.invalid` | The platform's rules refused it at approval |
+| `ping` | A test message from the ping call |
+
+Headers: `X-DK-Event` (the type), `X-DK-Event-Id` (the same as `id`, **identical on every retry**), `X-DK-Delivery`,
+`X-DK-Signature`.
+
+**4. Verify the signature, always.** Anyone can post to your address; only we know the secret.
+`X-DK-Signature` looks like `t=1766255412,v1=<hex>`, where `v1` is the HMAC-SHA256, keyed with your secret, of the
+text `"<t>.<raw request body>"`. Use the **raw bytes** you received (not re-encoded JSON), compare in constant time,
+and refuse a timestamp older than 5 minutes (a replayed message).
+
+```python
+import hashlib, hmac, time
+
+
+def valid(secret: str, header: str, raw_body: bytes) -> bool:
+    parts = dict(p.split("=", 1) for p in header.split(","))
+    t = int(parts["t"])
+    if abs(time.time() - t) > 300:
+        return False
+    expected = hmac.new(secret.encode(), f"{t}.".encode() + raw_body, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(expected, parts["v1"])
+```
+
+```js
+import { createHmac, timingSafeEqual } from "node:crypto";
+
+export function valid(secret, header, rawBody /* Buffer */) {
+  const parts = Object.fromEntries(header.split(",").map((p) => p.split("=")));
+  if (Math.abs(Date.now() / 1000 - Number(parts.t)) > 300) return false;
+  const expected = createHmac("sha256", secret).update(`${parts.t}.`).update(rawBody).digest("hex");
+  return expected.length === parts.v1.length && timingSafeEqual(Buffer.from(expected), Buffer.from(parts.v1));
+}
+```
+
+**5. Answer fast, and expect repeats.**
+- Reply with any `2xx` quickly (do the real work afterwards). Anything else, a timeout or no connection counts as a failure.
+- Failed messages are retried after **1 min, 5 min, 30 min, 2 h, 6 h, 24 h**; after the 7th failure we give up and the
+  owner is told on Telegram. The post itself is never affected.
+- Delivery is **at least once**: you may get the same message twice. Remember `id` and ignore a repeat.
+- Order is not guaranteed (a retry can arrive after a newer event). If unsure, read `GET /v1/posts/{post_key}`.
+- Answer `410 Gone` and we switch that webhook off. Redirects are not followed.
+- See what happened to each message with `GET /v1/webhooks/{endpoint_id}/deliveries` (`status` is `pending`,
+  `delivered` or `dead`, with `attempts`, `http_status` and `error`).
+- Only messages after you registered are sent (no history). Revoking the key stops them.
+
+The owner can list every registered webhook with `dk api webhooks` and switch one off with `dk api webhook-disable ID`.
+
 ## 6. When something is wrong: errors that teach
 
 Every failure is JSON (`application/problem+json`). A validation failure lists **every** problem at once:
@@ -290,7 +385,7 @@ Every failure is JSON (`application/problem+json`). A validation failure lists *
 Problem `code`s: `invalid`, `invalid_post_key`, `required`, `too_many`, `too_long`, `not_allowed`, `unknown_platform`, `unknown_format`,
 `unknown_option`, `unknown_field`, `unknown_account`, `account_required`, `unknown_media`, `media_expired`,
 `media_rejected` (see `expected`), `invalid_slot`, `slot_in_past`, `slot_too_far`, `duplicate_variant`, `post_key_taken`,
-`unsupported_type`, `too_large`, `empty`, `filename_required`, `bad_url`, `fetch_failed`, `storage_full`, `quota_exceeded`.
+`unsupported_type`, `too_large`, `empty`, `webhooks_off`, `filename_required`, `bad_url`, `fetch_failed`, `storage_full`, `quota_exceeded`.
 
 ## 7. Repeating safely (important for agents)
 
@@ -369,5 +464,5 @@ else console.log(await (await fetch(`${API}/v1/posts`, { method: "POST", headers
 
 - Times: you send any offset; the Sheet and Telegram messages show Berlin time. Times are stored in UTC.
 - Posts made here need **connected accounts** (`GET /v1/platforms` lists them). Only the owner can connect accounts.
-- Not built yet: webhooks (today you poll), editing a post in place (cancel and resend), per-key rate limits, an MCP wrapper for agents.
+- Not built yet: editing a post in place (cancel and resend), per-key rate limits, an MCP wrapper for agents.
 - Questions about a failed post: ask the owner; they see it in Telegram and the Calendar tab.

@@ -12,6 +12,7 @@ from dk_publishing.entrypoints.dagster_defs.jobs import (
     reconcile_variant_job,
     renew_tokens,
     schedule_native_job,
+    send_webhooks,
     sync_sheet_job,
     token_health,
 )
@@ -19,6 +20,7 @@ from dk_publishing.entrypoints.dagster_defs.resources import (
     NotifyResource,
     ServicesResource,
     SheetSyncResource,
+    WebhookResource,
 )
 from dk_publishing.entrypoints.dagster_defs.schedules import (
     daily_digest_schedule,
@@ -33,6 +35,7 @@ from dk_publishing.entrypoints.dagster_defs.sensors import (
     failed_run_alert,
     notifications,
     sheet_changed,
+    webhook_delivery,
 )
 
 
@@ -56,8 +59,15 @@ def build_definitions(
             renew_tokens,
             token_health,
             purge_media,
+            send_webhooks,
         ],
-        sensors=[due_actions, sheet_changed, notifications, failed_run_alert],
+        sensors=[
+            due_actions,
+            sheet_changed,
+            notifications,
+            failed_run_alert,
+            webhook_delivery,
+        ],
         schedules=[
             housekeeping_schedule,
             sheet_sync_fallback,
@@ -70,6 +80,7 @@ def build_definitions(
             "services": services,
             "sheet_sync": sheet_sync or default_sheet_sync(),
             "notify": NotifyResource(database_url=EnvVar("DATABASE_URL")),
+            "hooks": WebhookResource(database_url=EnvVar("DATABASE_URL")),
         },
     )
 

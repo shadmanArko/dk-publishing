@@ -86,6 +86,25 @@ storage_full, quota_exceeded.
 Other statuses: 401 no/invalid key, 403 the key lacks the right, 404 unknown post, 409 conflict,
 413 quota_exceeded (this key's upload space is full), 507 storage_full (server disk nearly full; uploads paused).
 
+## Webhooks (optional: instead of polling)
+
+POST   /v1/webhooks                          {"url": "https://you.example.com/hooks", "events": ["post.published"]}
+                                             -> 201 with "secret" (shown ONCE; it signs every message). Leave events out for all.
+GET    /v1/webhooks                          your webhooks (never the secret)
+DELETE /v1/webhooks/{endpoint_id}            stop
+GET    /v1/webhooks/{endpoint_id}/deliveries the latest messages: status, attempts, http_status, error
+POST   /v1/webhooks/{endpoint_id}/ping       send a test message now
+
+Needs a draft key. https and a public host only; a key may have 3 webhooks. We POST JSON:
+{"id": "evt_...", "type": "post.published", "created_at": "...", "data": {"post_key", "variant_id", "platform",
+"account", "format", "state", "status", "slot", "live_url", "handed_over", "reason"}}
+Events: post.approved, post.published, post.failed, post.expired, post.needs_check (outcome uncertain: do NOT resend),
+post.cancelled (also when the owner rejects it), post.invalid; and ping.
+Headers: X-DK-Event, X-DK-Event-Id (same on every retry: ignore a repeat), X-DK-Delivery, and
+X-DK-Signature: t=<unix>,v1=<hex HMAC-SHA256 of "<t>.<raw body>" with your secret>. Verify it and refuse a
+timestamp older than 5 minutes. Answer any 2xx quickly; anything else is retried (1 min, 5 min, 30 min, 2 h,
+6 h, 24 h, then given up and the owner is told). HTTP 410 switches the webhook off. Delivery is at least once.
+
 ## Files on the server
 
 512 MB per file; one key may keep 5 GB at once (413 quota_exceeded); uploads pause with 507 storage_full when the

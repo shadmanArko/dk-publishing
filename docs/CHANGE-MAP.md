@@ -83,6 +83,13 @@ Everything in the row above, plus:
 - ADR 0022; guide 01 ("Approve", "Posts that come from software"), guide 02 (keys and rights)
 - Decision on record: own posts are approved with `ready`; agent posts in the Calendar. Do not merge them without asking
 
+### Webhook events, payload or retries
+- `src/dk_publishing/domain/webhooks.py` (event types, signature), `src/dk_publishing/application/use_cases/webhooks.py` (payload, retry gaps)
+- `src/dk_publishing/adapters/notify/webhooks.py` (sending, address checks), `src/dk_publishing/adapters/persistence/webhooks.py`
+- A new event needs: guide 02 section 5b table, `llms.txt`, ADR 0023 (a test checks the lists agree)
+- Changing the payload or the signature breaks every client: add fields, never rename or remove; say so in guide 02
+- Tests: `tests/unit/test_webhooks.py`, `tests/integration/test_webhooks.py`; Dagster: `send_webhooks` job and `webhook_delivery` sensor
+
 ### A scheduled job, sensor or Dagster setting
 - `src/dk_publishing/entrypoints/dagster_defs/` (`jobs.py`, `schedules.py`, `sensors.py`, `definitions.py`)
 - `tests/integration/test_dagster.py` (the expected list of jobs and schedules), `dagster/dagster.prod.yaml` and `dagster.dev.yaml`

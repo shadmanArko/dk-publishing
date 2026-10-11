@@ -32,6 +32,7 @@ from dk_publishing.adapters.notify.telegram import (
     ping_heartbeat,
     run_setup,
 )
+from dk_publishing.adapters.notify.webhooks import HttpWebhookSender
 from dk_publishing.adapters.persistence.migrate import apply_migrations
 from dk_publishing.adapters.persistence.rehearsal import create_rehearsal_drafts
 from dk_publishing.adapters.persistence.sent_log import PostgresSentLog
@@ -85,6 +86,7 @@ from dk_publishing.application.ports import (
     Notifier,
     Publisher,
     UnitOfWork,
+    WebhookEndpoint,
 )
 from dk_publishing.application.services import ApiServices, Services, SyncServices
 from dk_publishing.application.use_cases.api_posts import PostView
@@ -96,6 +98,11 @@ from dk_publishing.application.use_cases.media_retention import (
 )
 from dk_publishing.application.use_cases.media_retention import purge_media as purge_media_files
 from dk_publishing.application.use_cases.results import RunResult
+from dk_publishing.application.use_cases.webhooks import (
+    DeliveryReport,
+    deliver_due,
+)
+from dk_publishing.application.use_cases.webhooks import has_work as webhooks_have_work_in
 from dk_publishing.domain.model import Actor, ActorKind
 from dk_publishing.domain.timezones import local_to_serial
 
@@ -424,6 +431,34 @@ def build_alert_services(database_url: str) -> Services:
     )
 
 
+def deliver_webhooks(
+    database_url: str, env: Mapping[str, str], tenant_id: str = "dk"
+) -> DeliveryReport:
+    """Queue and send what clients should hear about. Telegram is optional: without it a message
+    that was given up on is still recorded, the owner just is not told."""
+    try:
+        notifier = build_notifier(env)
+    except ConfigError:
+        notifier = None
+    return deliver_due(build_alert_services(database_url), HttpWebhookSender(), notifier, tenant_id)
+
+
+def webhooks_have_work(database_url: str) -> bool:
+    return webhooks_have_work_in(build_alert_services(database_url))
+
+
+def list_webhooks(database_url: str, tenant_id: str = "dk") -> list[WebhookEndpoint]:
+    with build_alert_services(database_url).uow() as uow:
+        return uow.webhooks.endpoints(tenant_id)
+
+
+def disable_webhook(database_url: str, endpoint_id: str, reason: str) -> bool:
+    with build_alert_services(database_url).uow() as uow:
+        done = uow.webhooks.disable_endpoint(endpoint_id, reason)
+        uow.commit()
+    return done
+
+
 def credential_warnings(env: Mapping[str, str]) -> list[str]:
     """Tokens that need attention soon, in words, for the daily digest."""
     ref = env.get("META_CREDENTIALS_FILE", "").strip()
@@ -545,6 +580,7 @@ def build_api_services(
         notifier=build_notifier(env, transport),
         tenant_id=tenant_id,
         disk=MediaDiskJanitor(media_folder(env)),
+        webhooks=HttpWebhookSender(),
         key_quota_bytes=_whole(env, "API_KEY_QUOTA_MB", DEFAULT_KEY_QUOTA_MB) * 1024**2,
         disk_stop_percent=_whole(env, "MEDIA_DISK_STOP_PERCENT", STOP_PERCENT),
     )

@@ -18,6 +18,7 @@ from dk_publishing.adapters.platforms.guides import GUIDES
 from dk_publishing.application.use_cases.media_retention import GRACE, STOP_PERCENT
 from dk_publishing.composition import DEFAULT_KEY_QUOTA_MB
 from dk_publishing.domain.status import VariantStatus
+from dk_publishing.domain.webhooks import EVENTS, PING
 
 ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "src" / "dk_publishing"
@@ -199,3 +200,11 @@ def test_every_relative_link_in_the_guides_resolves(guide: Path) -> None:
     for target in re.findall(r"\]\(([^)#]+)(?:#[^)]*)?\)", text(guide)):
         if not target.startswith(("http://", "https://", "mailto:")):
             assert (guide.parent / target).exists(), f"{guide.name} links to missing {target}"
+
+
+def test_every_webhook_event_is_explained_for_clients_and_agents() -> None:
+    for event in (*EVENTS, PING):
+        assert has(text(API), event), f"guide 02 does not explain the webhook event {event}"
+        assert event in text(LLMS), f"llms.txt does not explain the webhook event {event}"
+    for header in ("X-DK-Signature", "X-DK-Event-Id"):
+        assert header in text(API) and header in text(LLMS)

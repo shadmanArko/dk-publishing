@@ -85,11 +85,13 @@ def test_every_expected_definition_is_present() -> None:
         "renew_tokens",
         "token_health",
         "purge_media",
+        "send_webhooks",
     }
     assert defs.get_sensor_def("due_actions").minimum_interval_seconds == 30
     assert defs.get_sensor_def("sheet_changed").minimum_interval_seconds == 120
     assert defs.get_sensor_def("notifications").minimum_interval_seconds == 60
     assert defs.get_sensor_def("failed_run_alert") is not None
+    assert defs.get_sensor_def("webhook_delivery").minimum_interval_seconds == 30
     renewal = defs.get_schedule_def("token_renewal")
     assert (renewal.cron_schedule, renewal.execution_timezone) == ("30 3 * * *", "Europe/Berlin")
     digest = defs.get_schedule_def("daily_digest")

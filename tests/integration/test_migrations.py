@@ -27,6 +27,8 @@ EXPECTED_TABLES = {
     "alerts_sent",  # which Telegram alerts were delivered
     "api_keys",  # HTTP API client keys (hash only)
     "api_media",  # files sent through the API
+    "webhook_endpoints",  # where an API key wants to hear about its posts (ADR 0023)
+    "webhook_deliveries",  # one queued message per event and endpoint, with its retries
     "api_content",  # content of API drafts until they are approved
 }
 

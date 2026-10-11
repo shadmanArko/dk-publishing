@@ -140,3 +140,9 @@ from the code. When you add a new kind of change, add a row to the map.
 - **Server disk is shared and small.** Docker build cache grew to 26 GB in a month (disk 66%); `deploy/deploy.sh` now prunes
   cache older than 24 h after each deploy. Old unused images (~26 GB) are not pruned automatically: they may be the ordering
   system's rollback images, so ask before `docker image prune`.
+- **Webhooks** (ADR 0023, `application/use_cases/webhooks.py`, `adapters/notify/webhooks.py`): events come from `variant_events` of
+  `source='agent'` posts and are queued then sent by the `send_webhooks` run (sensor `webhook_delivery`), never on the publishing
+  path. At-least-once with a stable `evt_<variant>_<seq>` id, 7 attempts, signed `X-DK-Signature`, public https hosts only with the
+  connection pinned to the checked IP. Never log or alert a webhook URL beyond its host; never follow redirects. Add fields to the
+  payload, never rename or remove them (clients depend on it).
+

@@ -33,6 +33,7 @@ from dk_publishing.entrypoints.dagster_defs.resources import (
     NotifyResource,
     ServicesResource,
     SheetSyncResource,
+    WebhookResource,
 )
 
 
@@ -191,3 +192,17 @@ def purge_media_op(
 @job
 def purge_media() -> None:
     purge_media_op()
+
+
+@op
+def send_webhooks_op(context: OpExecutionContext, hooks: WebhookResource) -> None:
+    report = hooks.deliver()
+    context.log.info(
+        f"webhooks: queued {report.queued}, delivered {report.delivered}, "
+        f"will retry {report.retrying}, gave up on {report.dead}"
+    )
+
+
+@job(tags={"dk/webhooks": "send"})
+def send_webhooks() -> None:
+    send_webhooks_op()
