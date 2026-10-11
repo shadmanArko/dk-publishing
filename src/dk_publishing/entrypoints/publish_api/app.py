@@ -34,6 +34,7 @@ from dk_publishing.application.use_cases.api_posts import (
     get_post,
     list_posts,
     platform_guides,
+    request_example,
     submit_post,
     validate_post,
 )
@@ -185,11 +186,7 @@ def _format_json(f: FormatGuide) -> dict[str, Any]:
             "media": dataclasses.asdict(f.media),
             "caption": _field_json(f.caption) if f.caption else "not supported",
             "options": {o.name: _field_json(o) for o in f.fields},
-            "example": {
-                "platform": "(this platform)",
-                **f.example,
-                "slot": "2026-10-12T19:30:00+02:00",
-            },
+            "example": request_example("(this platform)", f.example),
         }
     )
 

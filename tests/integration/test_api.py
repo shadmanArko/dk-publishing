@@ -464,3 +464,26 @@ def test_the_sheet_sync_leaves_api_posts_alone_and_refuses_their_keys(rig: Rig) 
     assert report.cancelled == 0 and not report.errors
     assert rig.call("GET", "/v1/posts/campaign-1", "read").json()["summary"] == "scheduled"
     assert [e.source for e in sheet.calendar] == ["agent"]
+
+
+def test_every_example_the_api_hands_out_is_accepted_as_a_request(rig: Rig) -> None:
+    """An agent copies the example from GET /v1/platforms or from an error. Extra fields such as
+    share_to_feed or title must therefore sit under `options`, where the request wants them."""
+    for guide in rig.call("GET", "/v1/platforms", "read").json()["platforms"]:
+        for name, fmt in guide["formats"].items():
+            variant = dict(fmt["example"])
+            variant["platform"] = guide["platform"]
+            variant["slot"] = SLOT
+            kind = fmt["media"].get("types", [".jpg"])[0]
+            variant["media"] = [
+                rig.upload(f"{name}{i}{kind}") for i, _ in enumerate(variant.get("media", []))
+            ]
+            body = {"post_key": f"example-{guide['platform']}-{name}", "variants": [variant]}
+            response = rig.call("POST", "/v1/posts/validate", json=body)
+            assert response.json() == {"valid": True}, (guide["platform"], name, response.text)
+    reel = next(
+        g["formats"]["reel"]["example"]
+        for g in rig.call("GET", "/v1/platforms", "read").json()["platforms"]
+        if g["platform"] == "instagram"
+    )
+    assert reel["options"] == {"share_to_feed": True}

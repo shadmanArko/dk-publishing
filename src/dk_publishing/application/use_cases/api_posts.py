@@ -340,12 +340,21 @@ def _check_variant(
     return _Planned(variant, account, publish_at, content)
 
 
+def request_example(platform: str, example: Mapping[str, Any]) -> dict[str, Any]:
+    """A guide's example as the request body wants it: the platform's own fields go under
+    `options`, only format, caption and media sit at the top of the variant."""
+    variant: dict[str, Any] = {"platform": platform}
+    options: dict[str, Any] = {}
+    for name, value in example.items():
+        (variant if name in GENERAL_FIELDS else options)[name] = value
+    variant["slot"] = "2026-10-12T19:30:00+02:00"
+    if options:
+        variant["options"] = options
+    return variant
+
+
 def _attach_example(result: Checked, base: str, fmt: FormatGuide, platform: str) -> None:
-    result.examples[base] = {
-        "platform": platform,
-        **fmt.example,
-        "slot": "2026-10-12T19:30:00+02:00",
-    }
+    result.examples[base] = request_example(platform, fmt.example)
 
 
 def _account(

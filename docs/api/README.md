@@ -1,5 +1,7 @@
 # The HTTP API
 
+> New here? The step-by-step guides are in [`docs/guides/`](../guides/README.md): [posting with the Sheet](../guides/01-post-with-the-sheet.md) and [the API for developers and agents](../guides/02-api-for-developers-and-agents.md). This page is the short reference.
+
 Another program (a content tool, an AI agent) can schedule posts here instead of through the Google
 Sheet. It talks to the same engine: validation, approval, scheduling, retries and "never post twice"
 are shared, so a post made by the API behaves exactly like one made from the Sheet.
