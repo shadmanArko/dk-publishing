@@ -102,6 +102,19 @@ def test_the_secret_is_shown_once_and_never_listed(hooks: Hooks) -> None:
     assert "secret" not in json.dumps(listed)
 
 
+def test_a_bare_curl_without_a_json_label_can_register_a_webhook(hooks: Hooks) -> None:
+    """`curl -d '{...}'` labels the body as a form: the owner hit this on the first live try."""
+    headers = {"Authorization": f"Bearer {hooks.rig.keys['draft']}"}
+    for label in (None, "application/x-www-form-urlencoded"):
+        if label:
+            headers["Content-Type"] = label
+        response = hooks.rig.client.post(
+            "/v1/webhooks", content=json.dumps({"url": URL}), headers=headers
+        )
+        assert response.status_code == 201, (label, response.text)
+    assert len(hooks.rig.call("GET", "/v1/webhooks", "draft").json()["webhooks"]) == 2
+
+
 @pytest.mark.parametrize(
     ("url", "code"),
     [("http://agent.example.com/h", "bad_url"), ("https://u:p@agent.example.com", "bad_url")],

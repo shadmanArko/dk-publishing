@@ -74,14 +74,14 @@ class _Unauthorized(Exception):
     pass
 
 
-JSON_BODY_PATHS = ("/v1/posts", "/v1/posts/validate")
+JSON_BODY_PATHS = ("/v1/posts", "/v1/posts/validate", "/v1/webhooks")
 GUESSED_TYPES = (b"", b"application/x-www-form-urlencoded", b"text/plain")
 
 
 class _JsonByDefault:
-    """`curl -d` sends form-urlencoded and hand-written clients often send nothing. The post
-    endpoints only ever take JSON, so treat those labels as JSON. Media uploads are untouched
-    (their body is raw bytes), and a body that is not JSON still gets the usual 422."""
+    """`curl -d` sends form-urlencoded and hand-written clients often send nothing. The post and
+    webhook endpoints only ever take JSON, so treat those labels as JSON. Media uploads are
+    untouched (their body is raw bytes), and a body that is not JSON still gets the usual 422."""
 
     def __init__(self, app: Any) -> None:
         self.app = app

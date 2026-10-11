@@ -46,7 +46,7 @@ curl -s -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" -X P
 }'
 ```
 
-Send `Content-Type: application/json` when you can. The post endpoints also read a JSON body that arrives
+Send `Content-Type: application/json` when you can. The post and webhook endpoints also read a JSON body that arrives
 with no label or with curl's default form label.
 
 ## What a refusal looks like (this is the point)
