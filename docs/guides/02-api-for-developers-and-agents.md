@@ -287,7 +287,7 @@ Every failure is JSON (`application/problem+json`). A validation failure lists *
 | 422 | The request has problems (listed) |
 | 507 | `storage_full`: server disk nearly full, uploads paused; tell the owner |
 
-Problem `code`s: `invalid_post_key`, `required`, `too_long`, `not_allowed`, `unknown_platform`, `unknown_format`,
+Problem `code`s: `invalid`, `invalid_post_key`, `required`, `too_many`, `too_long`, `not_allowed`, `unknown_platform`, `unknown_format`,
 `unknown_option`, `unknown_field`, `unknown_account`, `account_required`, `unknown_media`, `media_expired`,
 `media_rejected` (see `expected`), `invalid_slot`, `slot_in_past`, `slot_too_far`, `duplicate_variant`, `post_key_taken`,
 `unsupported_type`, `too_large`, `empty`, `filename_required`, `bad_url`, `fetch_failed`, `storage_full`, `quota_exceeded`.

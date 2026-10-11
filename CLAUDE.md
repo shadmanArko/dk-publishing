@@ -2,6 +2,12 @@
 
 `docs/architecture.md` is the map; `docs/adr/` records why. This file lists what will bite you.
 
+**Before adding or changing any feature, read `docs/CHANGE-MAP.md`.** One change lives in several places (code,
+Sheet, API help `llms.txt`, both guides in `docs/guides/` and their PDFs, tests, the live Sheet, the server). Update
+every place the map lists for your kind of change in the same commit, run `make guides` if a guide changed, and
+`make check`. `tests/unit/test_docs_in_sync.py` fails when the guides, `llms.txt`, the Sheet text or the PDFs drift
+from the code. When you add a new kind of change, add a row to the map.
+
 - **Dependency rule:** `domain` imports only the stdlib; `application` only `domain`; only `composition.py`
   constructs adapters; nothing imports `entrypoints`. Enforced by `make arch` and `tests/unit/test_architecture.py`.
 - **Platform names** (instagram, facebook, ...) appear only in `adapters/platforms/` and `config/`. The scheduler

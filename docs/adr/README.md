@@ -16,6 +16,14 @@ Each file records one decision so a later change argues against the original rea
 | 10 | [SOPS and age for app secrets; AES-GCM in Postgres for tokens](0010-sops-and-age-for-app-secrets-aes-gcm-in-postgres.md) |
 | 11 | [Assisted mode as a full Publisher](0011-assisted-mode-as-a-full-publisher.md) |
 | 12 | [Default run launcher in one code-location container; own Dagster instance (option A)](0012-default-run-launcher-in-one-code-location-contai.md) |
+| 12 | [Default run launcher in one code-location container; own Dagster instance (option A)](0012-default-run-launcher-in-one-code-location-contai.md) |
+| 13 | [Separate repository, shared VPS and Postgres instance](0013-separate-repository-and-schema.md) |
+| 14 | [Launch scope decisions](0014-scope-decisions.md) |
+| 15 | [Forward-only SQL migrations, no downgrade](0015-forward-only-sql-migrations.md) |
+| 16 | [Facebook adapter publishes directly; credentials come from a token file for now](0016-facebook-adapter-interim-credentials.md) |
+| 17 | [Per-row delivery: native (the platform publishes) or direct (we publish)](0017-per-row-delivery-native-or-direct.md) |
+| 18 | [Telegram alerts, digest and heartbeat](0018-telegram-alerts.md) |
+| 19 | [Assisted publishing for TikTok](0019-assisted-publishing-for-tiktok.md) |
 | 20 | [An HTTP API for other software, over the same engine](0020-http-api-for-other-software.md) |
 | 21 | [Media is deleted when no post needs it, and uploads have limits](0021-media-retention-and-upload-limits.md) |
 | 22 | [Posts from the API are approved in the Sheet's Calendar tab](0022-agent-posts-are-approved-in-the-calendar.md) |

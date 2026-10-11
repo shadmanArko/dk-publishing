@@ -21,6 +21,7 @@ published twice.
 4. Create it
    POST /v1/posts               -> 201 with the post and where each platform stands
    GET  /v1/posts/{post_key}    status (poll, or just check later)
+   GET  /v1/posts               every post made through the API, newest first
 
 Send JSON bodies with `Content-Type: application/json` (a missing or form label is tolerated on /v1/posts).
 
@@ -75,12 +76,21 @@ Failures are RFC 9457 `application/problem+json`. Validation failures list EVERY
   "examples": {"variants[0]": {"platform": "instagram", "format": "reel", "...": "a valid variant"}}
 }
 
-`path` points into your request. Fix the listed fields and send again. Codes: invalid_post_key,
-required, too_long, not_allowed, unknown_platform, unknown_format, unknown_option, unknown_account,
-account_required, unknown_media, media_rejected (see `expected`), invalid_slot, slot_in_past,
-slot_too_far, duplicate_variant, post_key_taken, unsupported_type, too_large, bad_url.
+`path` points into your request. Fix the listed fields and send again. Codes: invalid, invalid_post_key,
+required, too_many, too_long, not_allowed, unknown_platform, unknown_format, unknown_option, unknown_field,
+unknown_account, account_required, unknown_media, media_expired (the file was removed a week after its post
+finished: upload again), media_rejected (see `expected`), invalid_slot, slot_in_past, slot_too_far,
+duplicate_variant, post_key_taken, unsupported_type, too_large, empty, filename_required, bad_url, fetch_failed,
+storage_full, quota_exceeded.
 
-Other statuses: 401 no/invalid key, 403 the key lacks the right, 404 unknown post, 409 conflict.
+Other statuses: 401 no/invalid key, 403 the key lacks the right, 404 unknown post, 409 conflict,
+413 quota_exceeded (this key's upload space is full), 507 storage_full (server disk nearly full; uploads paused).
+
+## Files on the server
+
+512 MB per file; one key may keep 5 GB at once (413 quota_exceeded); uploads pause with 507 storage_full when the
+server disk is nearly full. A file is deleted a week after its posts are finished: a post naming a deleted file
+is refused with media_expired, so upload it again and use the new id.
 
 ## Repeating a request
 

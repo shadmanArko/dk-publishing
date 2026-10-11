@@ -104,6 +104,9 @@ Then fill the platform's own columns:
 **Threads**
 `format` = `image` (or `text` / `video`)
 
+**Reddit** (not connected yet; the tab exists for later)
+`subreddit`, `title`, `post_type` are required
+
 > **Extra: `delivery`** (Facebook video, YouTube). Empty means `direct`: the server publishes at the minute you chose.
 > `native` means Facebook/YouTube hold the post and publish it themselves (works even if our server is off). `native`
 > needs the slot to be **at least 10 minutes ahead**.
@@ -147,12 +150,15 @@ Within about **2 minutes** the `status` column on each platform row changes. Not
 | status | Meaning | What to do |
 | --- | --- | --- |
 | *(empty)* | Not approved yet (`ready` not ticked) | Tick `ready` when it is right |
+| `draft` | Saved but not approved yet (for example `ready` is not ticked, or the row has a problem) | Check `last_error`, then tick `ready` |
 | `invalid` | Something is wrong. **`last_error` says what, in plain words** | Fix it, the Sheet re-checks automatically |
 | `approved` / `preparing` / `prepared` | Accepted and waiting for its time | Nothing |
+| `scheduling_native` | Being handed to Facebook/YouTube to hold for you (a few seconds) | Nothing |
 | `scheduled_native` | Facebook/YouTube is holding it for you | Nothing |
 | `publishing` | Going out right now | Nothing |
 | `published` | Live. **`live_url`** has the link | Done 🎉 |
 | `sent to you` | TikTok: a card with the video was sent to you on **Telegram** | Post it by hand from Telegram |
+| `unknown` | The server could not tell whether it went out and is checking with the platform | **Wait. Never create the post again** (that could post twice). It becomes `published` or `failed` |
 | `failed` / `expired` | It did not go out. `last_error` says why | Fix and ask for help if unclear |
 | `cancelled` | Cancelled by you | - |
 

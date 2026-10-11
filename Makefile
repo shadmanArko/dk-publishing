@@ -17,7 +17,9 @@ test:  ## pytest with coverage gate
 	uv run pytest --cov --cov-report=term-missing
 check: lint typecheck arch test  ## everything CI runs
 
-.PHONY: db-up db-down migrate dagster-dev seed-rehearsal check-google sheet-init sheet-init-dry meta-init meta-check meta-page-token meta-refresh connect-youtube check-youtube connect-tiktok-again connect-tiktok check-tiktok telegram-init telegram-chat telegram-check telegram-test alerts-digest init check-setup deploy deploy-secrets
+.PHONY: guides db-up db-down migrate dagster-dev seed-rehearsal check-google sheet-init sheet-init-dry meta-init meta-check meta-page-token meta-refresh connect-youtube check-youtube connect-tiktok-again connect-tiktok check-tiktok telegram-init telegram-chat telegram-check telegram-test alerts-digest init check-setup deploy deploy-secrets
+guides:  ## rebuild the PDF guides from docs/guides/*.md (needs Chrome); run after editing a guide
+	uv run python scripts/build_guides.py
 db-up:  ## start the local dev Postgres (Docker) on :5433
 	docker compose -f compose.dev.yaml up -d --wait
 db-down:  ## stop it (data kept)
