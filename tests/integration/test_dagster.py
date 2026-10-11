@@ -481,3 +481,22 @@ def test_a_brief_network_failure_in_the_sheet_sync_is_retried_not_reported() -> 
 
     source = Path(jobs.__file__).read_text()
     assert "allow_retries=False" in source
+
+
+def test_a_run_killed_by_a_restart_is_failed_instead_of_blocking_the_queue() -> None:
+    """A deploy in the middle of a sync once left a run 'starting' forever, which blocked every
+    later sync through the one-sync-at-a-time limit. Run monitoring must stay on, in both files."""
+    from pathlib import Path
+
+    import yaml
+    from dagster import DagsterInstance
+
+    folder = Path(__file__).resolve().parents[2] / "dagster"
+    for name in ("dagster.dev.yaml", "dagster.prod.yaml"):
+        monitoring = yaml.safe_load((folder / name).read_text())["run_monitoring"]
+        assert monitoring["enabled"] is True and monitoring["start_timeout_seconds"] <= 300
+        assert monitoring["max_resume_run_attempts"] == 0, name  # fail it, never resume a sync
+    dev = yaml.safe_load((folder / "dagster.dev.yaml").read_text())
+    with DagsterInstance.local_temp(overrides=dev) as instance:  # the settings are valid
+        assert instance.run_monitoring_enabled
+        assert instance.run_monitoring_settings["start_timeout_seconds"] == 180

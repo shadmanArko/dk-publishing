@@ -128,3 +128,6 @@
   no-op sync writes forever. New Calendar columns need `dk sheet init` on the live Sheet (old Sheets just lack the feature).
 - **Never `values.clear` a checkbox column** (found on the live Sheet): it removes the boxes. The Calendar rewrite clears
   its system columns one by one and writes FALSE into `approve`/`reject`; extra columns people add are left alone.
+- **Run monitoring is on** (`dagster/dagster.*.yaml`): a run killed mid-start/mid-run by a deploy is failed after ~3 min instead of
+  sitting in `starting` and blocking the one-sync-at-a-time limit (found on the first deploy of ADR 0022). Do not turn it off; a
+  stuck run by hand: `DagsterInstance.get().report_run_failed(run)` inside the webserver container.

@@ -1,6 +1,15 @@
 # Local development: run history in DAGSTER_HOME (SQLite). Same queue rules as production.
 telemetry:
   enabled: false
+run_monitoring:
+  # A run killed while starting or running (a deploy or restart in the middle of a sync) would
+  # stay "starting"/"started" forever and block every later run through the concurrency limits
+  # above. Monitoring fails such a run so the queue moves on. Runs are safe to repeat (the sensor
+  # and the sync are idempotent), so nothing is resumed.
+  enabled: true
+  start_timeout_seconds: 180
+  poll_interval_seconds: 30
+  max_resume_run_attempts: 0
 run_coordinator:
   module: dagster.core.run_coordinator
   class: QueuedRunCoordinator
