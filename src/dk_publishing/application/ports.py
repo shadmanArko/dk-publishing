@@ -100,6 +100,8 @@ class SyncVariant:
     external_id: str | None
     last_reason: str | None  # the reason on the variant's latest event
     source: str = "human"  # who made the post: 'human' (the Sheet) or 'agent' (the API)
+    content: Mapping[str, Any] | None = None  # the frozen snapshot, or an API draft's submission
+    created_by: str | None = None  # the API key that made it
 
 
 class SheetGateway(Protocol):
@@ -141,6 +143,7 @@ class UploadedMedia:
     filename: str
     sha256: str
     size: int
+    purged: bool = False  # the file was removed from the server after its retention period
 
 
 @dataclass(frozen=True, slots=True)
@@ -177,6 +180,15 @@ class ApiRepository(Protocol):
 
     def media(self, tenant_id: str, ids: Sequence[str]) -> dict[str, UploadedMedia]:
         """The known ones among `ids`, by id."""
+
+    def media_bytes(self, tenant_id: str, created_by: str) -> int:
+        """Bytes this key has uploaded that are still on the server."""
+
+    def media_since(self, tenant_id: str, since: datetime) -> list[UploadedMedia]:
+        """Uploads made at or after `since` (a file waiting for its post is not unused yet)."""
+
+    def mark_media_purged(self, tenant_id: str, sha256s: Sequence[str], at: datetime) -> int:
+        """Record that these files were removed from the disk. Returns how many rows changed."""
 
     def post(self, tenant_id: str, post_key: str) -> StoredPost | None: ...
 
@@ -245,6 +257,11 @@ class VariantRepository(Protocol):
 
     def stale(self, status: VariantStatus, updated_before: datetime, limit: int) -> list[Variant]:
         """Variants that have sat in `status` since before `updated_before`."""
+
+    def media_in_use(self, final_since: datetime) -> list[Mapping[str, Any]]:
+        """The media items (as frozen or submitted) of every variant that may still need its
+        files: anything not in a final state, and anything that became final at or after
+        `final_since`. Includes the content of API drafts, which have no snapshot yet."""
 
     def apply(
         self,
@@ -377,6 +394,36 @@ class IntakeRejected(Exception):
         self.message = message
 
 
+@dataclass(frozen=True, slots=True)
+class DiskUsage:
+    total: int
+    used: int
+
+    @property
+    def percent(self) -> int:
+        return 0 if self.total <= 0 else int(self.used * 100 / self.total)
+
+
+@dataclass(frozen=True, slots=True)
+class RemovedFile:
+    name: str
+    size: int
+    sha256: str | None  # set for API uploads, so their records can be marked as removed
+
+
+class MediaDisk(Protocol):
+    """The disk holding uploaded and downloaded media."""
+
+    def usage(self) -> DiskUsage: ...
+
+    def delete_unused(
+        self, keep: Sequence[Mapping[str, Any]], modified_before: datetime, *, dry_run: bool = False
+    ) -> list[RemovedFile]:
+        """Delete every media file that no item in `keep` refers to and that was last touched
+        before `modified_before` (and any abandoned half-written file). With `dry_run`, only
+        report what would go."""
+
+
 class UploadWriter(Protocol):
     def write(self, chunk: bytes) -> None:
         """Raises IntakeRejected when the file is too big."""
@@ -389,10 +436,11 @@ class UploadWriter(Protocol):
 class MediaIntake(Protocol):
     """Where files sent through the API are kept, so a post can name them by id."""
 
-    def begin(self, filename: str) -> UploadWriter:
-        """Raises IntakeRejected if the file type is not one any platform takes."""
+    def begin(self, filename: str, limit: int | None = None) -> UploadWriter:
+        """Raises IntakeRejected if the file type is not one any platform takes. `limit` lowers
+        the size cap for this one file (what is left of the uploader's quota)."""
 
-    def fetch(self, url: str, filename: str | None) -> StoredFile:
+    def fetch(self, url: str, filename: str | None, limit: int | None = None) -> StoredFile:
         """Download a public https file. Raises IntakeRejected."""
 
 

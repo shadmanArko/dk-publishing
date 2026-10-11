@@ -83,11 +83,37 @@ class PostgresApiRepository:
         if not valid:
             return {}
         rows = self._conn.execute(
-            """SELECT id::text, filename, sha256, bytes FROM publishing.api_media
+            """SELECT id::text, filename, sha256, bytes, purged_at FROM publishing.api_media
                WHERE tenant_id = %s AND id = ANY(%s::uuid[])""",
             (tenant_id, valid),
         ).fetchall()
-        return {r[0]: UploadedMedia(r[0], r[1], r[2], r[3]) for r in rows}
+        return {r[0]: UploadedMedia(r[0], r[1], r[2], r[3], r[4] is not None) for r in rows}
+
+    def media_bytes(self, tenant_id: str, created_by: str) -> int:
+        row = self._conn.execute(
+            """SELECT coalesce(sum(bytes), 0) FROM publishing.api_media
+               WHERE tenant_id = %s AND created_by = %s AND purged_at IS NULL""",
+            (tenant_id, created_by),
+        ).fetchone()
+        return int(row[0]) if row else 0
+
+    def media_since(self, tenant_id: str, since: datetime) -> list[UploadedMedia]:
+        rows = self._conn.execute(
+            """SELECT id::text, filename, sha256, bytes, purged_at FROM publishing.api_media
+               WHERE tenant_id = %s AND created_at >= %s""",
+            (tenant_id, since),
+        ).fetchall()
+        return [UploadedMedia(r[0], r[1], r[2], r[3], r[4] is not None) for r in rows]
+
+    def mark_media_purged(self, tenant_id: str, sha256s: Sequence[str], at: datetime) -> int:
+        if not sha256s:
+            return 0
+        cursor = self._conn.execute(
+            """UPDATE publishing.api_media SET purged_at = %s
+               WHERE tenant_id = %s AND sha256 = ANY(%s) AND purged_at IS NULL""",
+            (at, tenant_id, list(sha256s)),
+        )
+        return cursor.rowcount
 
     def post(self, tenant_id: str, post_key: str) -> StoredPost | None:
         row = self._conn.execute(

@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from dk_publishing.application.ports import (
     Clock,
     MediaCatalog,
+    MediaDisk,
     MediaIntake,
     MediaStore,
     Notifier,
@@ -48,3 +49,6 @@ class ApiServices:
     intake: MediaIntake
     notifier: Notifier | None = None
     tenant_id: str = "dk"
+    disk: MediaDisk | None = None  # None: the disk is not watched (tests)
+    key_quota_bytes: int = 0  # most one key may keep on the server; 0 = no limit
+    disk_stop_percent: int = 85  # uploads are refused from this fill level

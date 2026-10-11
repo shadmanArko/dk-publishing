@@ -12,7 +12,7 @@ from dk_publishing.domain.model import Actor, ActorKind, Variant, VariantEvent
 from dk_publishing.domain.planning import Action, NextStep
 from dk_publishing.domain.publishing import LivePost
 from dk_publishing.domain.snapshot import snapshot_hash
-from dk_publishing.domain.status import VariantStatus
+from dk_publishing.domain.status import FINAL, VariantStatus
 
 Conn = psycopg.Connection[tuple[Any, ...]]
 
@@ -89,6 +89,20 @@ class PostgresVariantRepository:
             (status.value, updated_before, limit),
         ).fetchall()
         return [_variant(r) for r in rows]
+
+    def media_in_use(self, final_since: datetime) -> list[Mapping[str, Any]]:
+        rows = self._conn.execute(
+            """SELECT v.snapshot, c.content FROM publishing.variants v
+               LEFT JOIN publishing.api_content c ON c.variant_id = v.id
+               WHERE v.status <> ALL(%s) OR v.updated_at >= %s""",
+            ([s.value for s in FINAL], final_since),
+        ).fetchall()
+        items: list[Mapping[str, Any]] = []
+        for snapshot, content in rows:
+            for body in (snapshot, content):
+                if isinstance(body, dict):
+                    items.extend(m for m in body.get("media", []) if isinstance(m, dict))
+        return items
 
     def events(self, variant_id: str) -> list[VariantEvent]:
         rows = self._conn.execute(

@@ -400,6 +400,16 @@ def _media(
                 )
             )
             continue
+        if found.purged:
+            problems.append(
+                Problem(
+                    f"{base}.media[{position}]",
+                    "media_expired",
+                    f"'{found.filename}' was removed from the server (files are kept for a week "
+                    "after their posts are done). Upload it again and use the new id.",
+                )
+            )
+            continue
         items.append(
             {
                 "name": found.filename,

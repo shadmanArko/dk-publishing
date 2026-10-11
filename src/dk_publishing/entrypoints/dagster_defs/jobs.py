@@ -166,3 +166,28 @@ def token_health_op(context: OpExecutionContext, notify: NotifyResource) -> None
 @job
 def token_health() -> None:
     token_health_op()
+
+
+@op
+def purge_media_op(
+    context: OpExecutionContext, services: ServicesResource, notify: NotifyResource
+) -> None:
+    result, warning = services.purge_media()
+    context.log.info(
+        f"media cleanup: removed {len(result.removed)} file(s), {result.bytes // 1024**2} MB"
+    )
+    if warning is None:
+        return
+    context.log.warning(warning)
+    try:
+        notifier = notify.notifier()
+    except ConfigError as exc:
+        context.log.warning(f"could not warn you on Telegram, it is incomplete: {exc}")
+        return
+    if notifier is not None:
+        report_health(notify.services(), notifier, [warning])
+
+
+@job
+def purge_media() -> None:
+    purge_media_op()

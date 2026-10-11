@@ -18,6 +18,7 @@ from dk_publishing.application.use_cases._common import delivery_problems, move
 from dk_publishing.application.use_cases.approve import approve
 from dk_publishing.application.use_cases.native import withdraw_native
 from dk_publishing.application.use_cases.results import RunResult
+from dk_publishing.application.use_cases.review_drafts import MIN_LEAD, awaiting, review_drafts
 from dk_publishing.domain.model import Actor, ActorKind, Variant
 from dk_publishing.domain.publishing import VariantSnapshot, Violation
 from dk_publishing.domain.sheet import (
@@ -76,6 +77,8 @@ class SyncReport:
     problems: list[str] = field(default_factory=list)  # about the Sheet itself
     errors: list[str] = field(default_factory=list)  # a variant that could not be updated
     halted: str | None = None
+    reviewed_approved: int = 0  # agent posts approved by a tick in the Calendar
+    reviewed_rejected: int = 0
 
     @property
     def changed(self) -> bool:
@@ -156,6 +159,14 @@ def sync_sheet(sync: SyncServices, *, allow_cancellations: bool = False) -> Sync
         _guarded(
             report, f"{key[0]}/{key[1]}", _reconcile, sync, d, existing_by_key.get(key), now, report
         )
+
+    # 2b. ticks on posts an agent submitted (Calendar tab); they are cleared when it is rewritten
+    if snapshot.decisions:
+        with core.uow() as uow:
+            current = uow.sync.variants(tenant)
+        review = review_drafts(core, tenant, snapshot.decisions, current)
+        report.reviewed_approved, report.reviewed_rejected = review.approved, review.rejected
+        report.problems.extend(review.problems)
 
     # 3. tell the person what happened
     with core.uow() as uow:
@@ -458,21 +469,45 @@ def _status_plan(
         if changed_text(post.system, {"status": summary, "last_error": error}):
             post_rows.append(PostStatus(post.row, summary, error))
 
-    calendar = [
-        CalendarEntry(
-            slot=v.variant.publish_at,
-            platform=v.variant.platform,
-            account=v.account_name or "",
-            post_key=v.post_key,
-            title=v.title or "",
-            status=v.variant.status.value,
-            source="agent" if v.source == "agent" else "human",
-        )
-        for v in variants
-        if v.variant.status in CALENDAR_STATES
-    ]
+    calendar = sorted(
+        (_calendar_entry(v, now) for v in variants if _on_calendar(v)),
+        key=lambda e: (e.slot, e.platform, e.post_key),
+    )
     names: dict[str, list[str]] = {p: [] for p in sync.platforms}
     for a in accounts:
         if a.status == "active" and a.display_name and a.platform in names:
             names[a.platform].append(a.display_name)
     return StatusPlan(rows=rows, posts=post_rows, calendar=calendar, accounts=names)
+
+
+def _on_calendar(v: SyncVariant) -> bool:
+    return v.variant.status in CALENDAR_STATES or awaiting(v)
+
+
+def _calendar_entry(v: SyncVariant, now: datetime) -> CalendarEntry:
+    content = v.content or {}
+    status = v.variant.status.value
+    note = ""
+    if awaiting(v):
+        status = "invalid" if v.variant.status is S.INVALID else "awaiting_approval"
+        if v.variant.status is S.INVALID:
+            note = v.last_reason or "Refused by the platform's rules. Tick reject."
+        elif v.variant.publish_at < now + MIN_LEAD:
+            note = "The slot has passed. Tick reject; the agent must resubmit."
+        else:
+            note = "Waiting for you: tick approve or reject."
+    media = content.get("media", [])
+    return CalendarEntry(
+        slot=v.variant.publish_at,
+        platform=v.variant.platform,
+        account=v.account_name or "",
+        post_key=v.post_key,
+        title=v.title or "",
+        status=status,
+        source="agent" if v.source == "agent" else "human",
+        format=str(content.get("format", "")),
+        caption=str(content.get("caption", "")),
+        media=", ".join(str(m.get("name", "")) for m in media if isinstance(m, dict)),
+        by=v.created_by or "",
+        note=note,
+    )

@@ -116,6 +116,12 @@ def _run(argv: Sequence[str] | None = None) -> int:
     serve = api_commands.add_parser("serve", help="run the API server")
     serve.add_argument("--host", default="127.0.0.1")
     serve.add_argument("--port", type=int, default=8000)
+    media = commands.add_parser("media", help="the media disk: clean up files nothing needs")
+    media_commands = media.add_subparsers(dest="media_command", required=True)
+    purge = media_commands.add_parser(
+        "purge", help="delete media no post needs any more (what the nightly job does)"
+    )
+    purge.add_argument("--dry-run", action="store_true", help="only list what would be deleted")
     rehearsal = commands.add_parser(
         "seed-rehearsal", help="create approved dry-run posts a few minutes from now"
     )
@@ -156,6 +162,8 @@ def _run(argv: Sequence[str] | None = None) -> int:
         return _alerts(database_url, args.what)
     if args.command == "api":
         return _api(args, database_url)
+    if args.command == "media":
+        return _media(database_url, dry_run=args.dry_run)
     if args.command == "migrate":
         applied = composition.migrate_database(database_url)
         print("\n".join(f"applied {name}" for name in applied) or "already up to date")
@@ -410,6 +418,17 @@ def _telegram(command: str) -> int:
         return 1
     print("\n".join(result.lines))
     return 0 if result.ok else 1
+
+
+def _media(database_url: str, *, dry_run: bool) -> int:
+    result, warning = composition.purge_media(database_url, _env(), dry_run=dry_run)
+    verb = "would delete" if dry_run else "deleted"
+    for file in result.removed:
+        print(f"{verb} {file.name} ({file.size // 1024} KB)")
+    print(f"{verb} {len(result.removed)} file(s), {result.bytes // 1024**2} MB")
+    if warning:
+        print(warning)
+    return 0
 
 
 def _api(args: argparse.Namespace, database_url: str) -> int:

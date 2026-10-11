@@ -37,16 +37,27 @@ from dk_publishing.application.use_cases.api_posts import (
     submit_post,
     validate_post,
 )
+from dk_publishing.application.use_cases.media_retention import upload_allowance
 from dk_publishing.domain.guide import FieldGuide, FormatGuide, PlatformGuide
 
 PROBLEM = "application/problem+json"
-STATUS = {"invalid": 422, "conflict": 409, "not_found": 404, "forbidden": 403}
+STATUS = {
+    "invalid": 422,
+    "conflict": 409,
+    "not_found": 404,
+    "forbidden": 403,
+    "quota_exceeded": 413,
+    "storage_full": 507,
+}
+UPLOAD_REFUSALS = ("quota_exceeded", "storage_full")  # IntakeRejected codes with their own status
 TITLE = {
     "invalid": "The request has problems",
     "conflict": "Conflict",
     "not_found": "Not found",
     "forbidden": "Forbidden",
     "unauthorized": "Authentication required",
+    "quota_exceeded": "Upload quota used",
+    "storage_full": "Server storage is full",
 }
 GUIDE_FILE = Path(__file__).with_name("llms.txt")
 
@@ -341,20 +352,20 @@ def create_app(api: ApiServices) -> FastAPI:
         """Send the file itself as the request body with `?filename=reel.mp4`, or send JSON
         `{"url": "https://...", "filename": "reel.mp4"}` and the server downloads it."""
         try:
+            limit = await run_in_threadpool(upload_allowance, api, key.name)
             if request.headers.get("content-type", "").startswith("application/json"):
                 body = MediaFromUrl.model_validate(await request.json())
-                stored = await run_in_threadpool(api.intake.fetch, body.url, body.filename)
+                stored = await run_in_threadpool(api.intake.fetch, body.url, body.filename, limit)
             else:
                 if not filename:
                     raise IntakeRejected(
                         "filename_required",
                         "Add ?filename=reel.mp4 (the extension says what it is).",
                     )
-                stored = await _receive(api, request, filename)
+                stored = await _receive(api, request, filename, limit)
         except IntakeRejected as exc:
-            raise ApiError(
-                "invalid", exc.message, [Problem("media", exc.code, exc.message)]
-            ) from None
+            kind = exc.code if exc.code in UPLOAD_REFUSALS else "invalid"
+            raise ApiError(kind, exc.message, [Problem("media", exc.code, exc.message)]) from None
         media = await run_in_threadpool(register_media, api, stored, created_by=key.name)
         return {
             "media_id": media.id,
@@ -402,8 +413,10 @@ def create_app(api: ApiServices) -> FastAPI:
     return app
 
 
-async def _receive(api: ApiServices, request: Request, filename: str) -> StoredFile:
-    writer = api.intake.begin(filename)
+async def _receive(
+    api: ApiServices, request: Request, filename: str, limit: int | None
+) -> StoredFile:
+    writer = api.intake.begin(filename, limit)
     try:
         async for chunk in request.stream():
             writer.write(chunk)

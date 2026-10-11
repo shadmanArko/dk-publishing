@@ -3,6 +3,7 @@ from dagster import DefaultScheduleStatus, ScheduleDefinition
 from dk_publishing.entrypoints.dagster_defs.jobs import (
     daily_digest,
     housekeeping,
+    purge_media,
     renew_tokens,
     sync_sheet_job,
     token_health,
@@ -51,6 +52,16 @@ token_health_schedule = ScheduleDefinition(
     name="token_health",
     job=token_health,
     cron_schedule="45 3 * * *",
+    execution_timezone="Europe/Berlin",
+    default_status=DefaultScheduleStatus.RUNNING,
+)
+
+# Media that no post needs any more is deleted so the disk never fills up (ADR 0021). Quiet hour,
+# after the nightly token work.
+media_cleanup_schedule = ScheduleDefinition(
+    name="media_cleanup",
+    job=purge_media,
+    cron_schedule="15 4 * * *",
     execution_timezone="Europe/Berlin",
     default_status=DefaultScheduleStatus.RUNNING,
 )

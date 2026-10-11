@@ -70,9 +70,10 @@ class PostgresSyncRepository:
                       v.external_id,
                       (SELECT e.reason FROM publishing.variant_events e
                         WHERE e.variant_id = v.id ORDER BY e.seq DESC LIMIT 1),
-                      p.source
+                      p.source, coalesce(v.snapshot, c.content), p.created_by
                FROM publishing.variants v
                JOIN publishing.posts p ON p.tenant_id = v.tenant_id AND p.id = v.post_id
+               LEFT JOIN publishing.api_content c ON c.variant_id = v.id
                JOIN publishing.social_accounts a
                     ON a.tenant_id = v.tenant_id AND a.id = v.account_id
                WHERE v.tenant_id = %s
@@ -100,6 +101,8 @@ class PostgresSyncRepository:
                 external_id=r[14],
                 last_reason=r[15],
                 source=r[16],
+                content=r[17],
+                created_by=r[18],
             )
             for r in rows
         ]

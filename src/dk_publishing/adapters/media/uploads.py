@@ -24,7 +24,7 @@ from dk_publishing.domain.publishing import Rendition
 
 # Every file type some platform accepts. Whether a given platform takes it is checked per post.
 ALLOWED = (".jpg", ".jpeg", ".png", ".mp4", ".mov", ".m4v", ".webm", ".avi", ".mkv")
-DEFAULT_MAX_BYTES = 1024**3
+DEFAULT_MAX_BYTES = 512 * 1024**2
 MAX_REDIRECTS = 3
 Resolver = Callable[[str], Sequence[str]]
 
@@ -48,9 +48,10 @@ def _public(address: str) -> bool:
 
 
 class _Writer:
-    def __init__(self, store: UploadStore, filename: str) -> None:
+    def __init__(self, store: UploadStore, filename: str, limit: int | None = None) -> None:
         self._store = store
         self._name = filename
+        self._limit = min(limit, store.max_bytes) if limit else store.max_bytes
         store.dir.mkdir(parents=True, exist_ok=True)
         self._part = store.dir / f".{safe_name(filename)}.{id(self)}.part"
         self._handle = open(self._part, "wb")  # noqa: SIM115 - closed in finish/abort
@@ -59,10 +60,10 @@ class _Writer:
 
     def write(self, chunk: bytes) -> None:
         self._size += len(chunk)
-        if self._size > self._store.max_bytes:
+        if self._size > self._limit:
             self.abort()
             raise IntakeRejected(
-                "too_large", f"The file is over the {self._store.max_bytes // 1024**2} MB limit."
+                "too_large", f"The file is over the {self._limit // 1024**2} MB limit."
             )
         self._sha.update(chunk)
         self._handle.write(chunk)
@@ -102,11 +103,11 @@ class UploadStore:
 
     # --- MediaIntake ---------------------------------------------------------------------
 
-    def begin(self, filename: str) -> UploadWriter:
+    def begin(self, filename: str, limit: int | None = None) -> UploadWriter:
         self._check_type(filename)
-        return _Writer(self, filename)
+        return _Writer(self, filename, limit)
 
-    def fetch(self, url: str, filename: str | None) -> StoredFile:
+    def fetch(self, url: str, filename: str | None, limit: int | None = None) -> StoredFile:
         response_name = filename
         current = url
         with httpx.Client(transport=self._transport, timeout=60.0, follow_redirects=False) as http:
@@ -124,7 +125,7 @@ class UploadStore:
                                 f"The link answered HTTP {response.status_code}, not 200.",
                             )
                         name = response_name or unquote(Path(urlparse(current).path).name)
-                        writer = self.begin(name or "file")
+                        writer = self.begin(name or "file", limit)
                         try:
                             for chunk in response.iter_bytes(1024 * 1024):
                                 writer.write(chunk)

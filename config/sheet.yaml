@@ -83,6 +83,13 @@ calendar:
   - {name: title, kind: text, system: true}
   - {name: status, kind: status}
   - {name: source, kind: text, system: true, note: "human or agent"}
+  - {name: format, kind: text, system: true}
+  - {name: caption, kind: text, system: true}
+  - {name: media, kind: text, system: true}
+  - {name: by, kind: text, system: true, note: "The API key an agent's post came from."}
+  - {name: note, kind: text, system: true, note: "Why a post needs you, or why a tick was refused."}
+  - {name: approve, kind: checkbox, note: "Tick to approve a post an agent submitted (status awaiting_approval). Only those rows react."}
+  - {name: reject, kind: checkbox, note: "Tick to cancel a post an agent submitted before it goes out."}
 
 # Extra lists on the _lists tab. Each platform also gets an accounts_<platform> column, filled by
 # the system when an account is connected.

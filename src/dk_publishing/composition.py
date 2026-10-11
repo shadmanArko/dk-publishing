@@ -16,6 +16,7 @@ from dk_publishing.adapters.config.secrets_file import split_ref
 from dk_publishing.adapters.config.sheet_layout import load_sheet_layout
 from dk_publishing.adapters.media.drive_catalog import DriveCatalog, sheet_modified_time
 from dk_publishing.adapters.media.drive_store import DriveMediaStore, GoogleDriveDownloader
+from dk_publishing.adapters.media.janitor import MediaDiskJanitor
 from dk_publishing.adapters.media.public import PublicMediaStore
 from dk_publishing.adapters.media.uploads import (
     DEFAULT_MAX_BYTES,
@@ -88,6 +89,12 @@ from dk_publishing.application.ports import (
 from dk_publishing.application.services import ApiServices, Services, SyncServices
 from dk_publishing.application.use_cases.api_posts import PostView
 from dk_publishing.application.use_cases.approve import approve
+from dk_publishing.application.use_cases.media_retention import (
+    GRACE,
+    STOP_PERCENT,
+    PurgeResult,
+)
+from dk_publishing.application.use_cases.media_retention import purge_media as purge_media_files
 from dk_publishing.application.use_cases.results import RunResult
 from dk_publishing.domain.model import Actor, ActorKind
 from dk_publishing.domain.timezones import local_to_serial
@@ -537,7 +544,40 @@ def build_api_services(
         intake=UploadStore(media_folder(env), max_bytes=limit),
         notifier=build_notifier(env, transport),
         tenant_id=tenant_id,
+        disk=MediaDiskJanitor(media_folder(env)),
+        key_quota_bytes=_whole(env, "API_KEY_QUOTA_MB", DEFAULT_KEY_QUOTA_MB) * 1024**2,
+        disk_stop_percent=_whole(env, "MEDIA_DISK_STOP_PERCENT", STOP_PERCENT),
     )
+
+
+DEFAULT_KEY_QUOTA_MB = 5120
+
+
+def _whole(env: Mapping[str, str], name: str, default: int) -> int:
+    text = env.get(name, "").strip()
+    if not text:
+        return default
+    try:
+        return int(text)
+    except ValueError:
+        raise ConfigError(f"{name} must be a whole number") from None
+
+
+def purge_media(
+    database_url: str, env: Mapping[str, str], *, dry_run: bool = False, tenant_id: str = "dk"
+) -> tuple[PurgeResult, str | None]:
+    """Delete media nothing needs any more; also returns the disk warning, if there is one."""
+    from dk_publishing.application.use_cases.media_retention import disk_warning
+
+    disk = MediaDiskJanitor(media_folder(env))
+    result = purge_media_files(
+        build_alert_services(database_url),
+        disk,
+        grace=timedelta(days=_whole(env, "MEDIA_RETENTION_DAYS", GRACE.days)),
+        tenant_id=tenant_id,
+        dry_run=dry_run,
+    )
+    return result, disk_warning(disk.usage())
 
 
 def _api_core(database_url: str) -> Services:

@@ -84,6 +84,7 @@ def test_every_expected_definition_is_present() -> None:
         "daily_digest",
         "renew_tokens",
         "token_health",
+        "purge_media",
     }
     assert defs.get_sensor_def("due_actions").minimum_interval_seconds == 30
     assert defs.get_sensor_def("sheet_changed").minimum_interval_seconds == 120
@@ -93,6 +94,8 @@ def test_every_expected_definition_is_present() -> None:
     assert (renewal.cron_schedule, renewal.execution_timezone) == ("30 3 * * *", "Europe/Berlin")
     digest = defs.get_schedule_def("daily_digest")
     assert (digest.cron_schedule, digest.execution_timezone) == ("0 8 * * *", "Europe/Berlin")
+    cleanup = defs.get_schedule_def("media_cleanup")
+    assert (cleanup.cron_schedule, cleanup.execution_timezone) == ("15 4 * * *", "Europe/Berlin")
     schedule = defs.get_schedule_def("housekeeping")
     assert (schedule.cron_schedule, schedule.execution_timezone) == ("*/5 * * * *", "Europe/Berlin")
 

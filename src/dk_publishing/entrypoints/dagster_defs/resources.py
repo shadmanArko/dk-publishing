@@ -7,6 +7,7 @@ from dagster import ConfigurableResource
 from dk_publishing import composition
 from dk_publishing.application.ports import Notifier
 from dk_publishing.application.services import Services, SyncServices
+from dk_publishing.application.use_cases.media_retention import PurgeResult
 
 
 class ServicesResource(ConfigurableResource):  # type: ignore[type-arg]
@@ -22,6 +23,9 @@ class ServicesResource(ConfigurableResource):  # type: ignore[type-arg]
 
     def purge_public_media(self) -> int:
         return composition.purge_public_media(composition.environment())
+
+    def purge_media(self) -> tuple[PurgeResult, str | None]:
+        return composition.purge_media(self.database_url, composition.environment())
 
     def services(self) -> Services:
         return composition.build_services(

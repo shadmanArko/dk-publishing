@@ -7,6 +7,7 @@ from typing import Any
 
 from dk_publishing.domain.publishing import Violation
 from dk_publishing.domain.sheet import (
+    CalendarDecision,
     CalendarEntry,
     MediaFile,
     PlatformRow,
@@ -35,6 +36,7 @@ class MemorySheet:
         self.calendar: list[CalendarEntry] = []
         self.accounts: dict[str, list[str]] = {}
         self.tab_problems: list[str] = []
+        self.decisions: list[CalendarDecision] = []  # ticks, cleared when the Calendar is rewritten
         self._next_row = {POSTS_TAB: 2, TAB: 2}
 
     def add_post(self, post_key: str, **fields: Any) -> dict[str, Any]:
@@ -82,7 +84,7 @@ class MemorySheet:
 
     # --- SheetGateway ---
     def read(self) -> SheetSnapshot:
-        out = SheetSnapshot(problems=list(self.tab_problems))
+        out = SheetSnapshot(problems=list(self.tab_problems), decisions=list(self.decisions))
         for p in self.posts:
             out.posts.append(
                 PostRow(
@@ -119,6 +121,7 @@ class MemorySheet:
             cells += 2
         if plan.calendar is not None:
             self.calendar = list(plan.calendar)
+            self.decisions = []
         if plan.accounts is not None:
             self.accounts = {k: list(v) for k, v in plan.accounts.items()}
         return cells

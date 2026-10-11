@@ -17,3 +17,5 @@ Each file records one decision so a later change argues against the original rea
 | 11 | [Assisted mode as a full Publisher](0011-assisted-mode-as-a-full-publisher.md) |
 | 12 | [Default run launcher in one code-location container; own Dagster instance (option A)](0012-default-run-launcher-in-one-code-location-contai.md) |
 | 20 | [An HTTP API for other software, over the same engine](0020-http-api-for-other-software.md) |
+| 21 | [Media is deleted when no post needs it, and uploads have limits](0021-media-retention-and-upload-limits.md) |
+| 22 | [Posts from the API are approved in the Sheet's Calendar tab](0022-agent-posts-are-approved-in-the-calendar.md) |

@@ -118,3 +118,11 @@
   constants, and `tests/unit/test_guides.py` proves them against the real `validate`: a new platform or format needs a guide,
   and a platform without one is simply not offered. Keys are stored as SHA-256; scopes read < draft < approve. Uploaded
   files live in `<MEDIA_DIR>/uploads/<sha256>-<name>` and the media store routes `media_id` items there.
+- **Media retention** (ADR 0021, `application/use_cases/media_retention.py`, `adapters/media/janitor.py`): nightly
+  `media_cleanup` deletes uploads/Drive downloads that no non-final (or recently final) variant references; never delete
+  by age alone. Uploads are refused at 85% disk (507) and past a per-key quota (413); removed files set
+  `api_media.purged_at` and posts naming them get `media_expired`. The file-name rules in the janitor must match the stores.
+- **Calendar approval** (ADR 0022, `application/use_cases/review_drafts.py`): the Calendar tab shows human and agent posts
+  by date (`source`, `by`, `note`); agent posts waiting for a person get `approve`/`reject` checkboxes that the sync reads
+  and clears by rewriting the tab. Unticked boxes read back as `FALSE`: `gateway._norm` treats that as empty, keep it, or a
+  no-op sync writes forever. New Calendar columns need `dk sheet init` on the live Sheet (old Sheets just lack the feature).

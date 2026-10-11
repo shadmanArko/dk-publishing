@@ -375,3 +375,38 @@ def test_the_drive_catalog_follows_pages_and_skips_folders() -> None:
 
 def test_the_sheets_modified_time_is_returned_as_text() -> None:
     assert sheet_modified_time(DriveFiles([]), "SID") == "2026-10-01T10:00:00.123Z"
+
+
+def test_ticks_on_the_calendar_are_read_as_decisions() -> None:
+    grids = blank()
+    ticked = put(
+        grids, "Calendar", post_key="A-1", platform="instagram", account="Main", approve=True
+    )
+    put(grids, "Calendar", post_key="A-2", platform="youtube", account="Main", approve=False)
+    both = put(grids, "Calendar", post_key="A-3", platform="tiktok", account="Main", reject=True)
+    g, _ = gateway(grids)
+    found = [(d.row, d.post_key, d.approve, d.reject) for d in g.read().decisions]
+    assert found == [(ticked, "A-1", True, False), (both, "A-3", False, True)]
+
+
+def test_an_old_calendar_without_the_new_columns_reads_no_decisions() -> None:
+    grids = blank()
+    grids["Calendar"] = [["slot", "platform", "account", "post_key", "title", "status", "source"]]
+    g, _ = gateway(grids)
+    assert g.read().decisions == []
+
+
+def test_unticked_boxes_reading_back_as_false_do_not_make_the_calendar_look_changed() -> None:
+    entry = CalendarEntry(NOW, "instagram", "Main", "DK-1", "Eid", "approved", "human")
+    grids = blank()
+    g, fake = gateway(grids)
+    g.read()
+    g.write(StatusPlan(calendar=[entry]))
+    [block] = [u for u in fake.updates if u["range"] == "'Calendar'!A2"]
+    row = list(block["values"][0])
+    row[TABS["Calendar"].index("approve")] = False  # what Google returns for a blank checkbox
+    row[TABS["Calendar"].index("reject")] = False
+    grids["Calendar"].append(row)
+    g2, fake2 = gateway(grids)
+    g2.read()
+    assert g2.write(StatusPlan(calendar=[entry])) == 0 and fake2.clears == []

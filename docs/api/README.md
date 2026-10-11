@@ -73,10 +73,17 @@ adapters themselves (a test checks every guide example against the real validati
 - **Repeating is safe.** `post_key` is your own id for the post. Send it again with the same content (after a
   timeout) and you get the existing post back (`200`, `Idempotent-Replay: true`), never a second one. The same
   `post_key` with different content is `409`: cancel and use a new key.
-- **Drafts wait for you.** A normal key creates drafts; the owner is told on Telegram and approves with
-  `dk api approve <post_key>`. A key with the `approve` right may publish directly (`"approve": true`).
+- **Drafts wait for you.** A normal key creates drafts; the owner is told on Telegram and approves by ticking
+  `approve` on the Sheet's Calendar tab (or with `dk api approve <post_key>`). `reject` cancels the draft. A key with the `approve` right may publish directly (`"approve": true`).
 - **Typos are caught.** Unknown fields and unknown options are refused, not ignored.
 - **Times need an offset.** `2026-10-12T19:30:00+02:00` or `...Z`. A bare time is ambiguous and refused.
+
+## Files on the server
+
+Uploads are kept only while a post needs them: a week after a post is finished (published, cancelled, failed) its
+file is removed, and a post naming it gets `media_expired` (upload again). Limits: 512 MB per file, 5 GB per key
+kept at once (`413 quota_exceeded`), and uploads pause with `507 storage_full` when the server disk is 85% full.
+See ADR 0021.
 
 ## Keys (owner)
 

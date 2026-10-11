@@ -53,8 +53,21 @@ class RawRow:
     cells: Mapping[str, Any]
 
 
+@dataclass(frozen=True, slots=True)
+class CalendarDecision:
+    """A person ticked `approve` or `reject` on a Calendar row (a post an agent submitted)."""
+
+    row: int
+    post_key: str
+    platform: str
+    account: str
+    approve: bool
+    reject: bool
+
+
 @dataclass(slots=True)
 class SheetSnapshot:
+    decisions: list[CalendarDecision] = field(default_factory=list)
     posts: list[PostRow] = field(default_factory=list)
     rows: list[PlatformRow] = field(default_factory=list)
     raw: list[RawRow] = field(default_factory=list)
@@ -99,6 +112,11 @@ class CalendarEntry:
     title: str
     status: str
     source: str
+    format: str = ""
+    caption: str = ""
+    media: str = ""
+    by: str = ""  # the API key behind an agent's post
+    note: str = ""  # why something needs a person, or why a tick was refused
 
 
 @dataclass(frozen=True, slots=True)

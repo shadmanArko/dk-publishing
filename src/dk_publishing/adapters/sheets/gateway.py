@@ -15,6 +15,7 @@ from dk_publishing.adapters.config.sheet_layout import Column, SheetLayout
 from dk_publishing.adapters.sheets.sheet_init import CALENDAR, LISTS, POSTS, col_letter
 from dk_publishing.domain.publishing import Violation
 from dk_publishing.domain.sheet import (
+    CalendarDecision,
     PlatformRow,
     PostRow,
     RawRow,
@@ -97,8 +98,32 @@ class GoogleSheetGateway:
                 del self._headers[tab]
                 continue
             self._parse_tab(tab, columns, grids[tab], snapshot)
+        snapshot.decisions = self._calendar_decisions()
         self._read_done = True
         return snapshot
+
+    def _calendar_decisions(self) -> list[CalendarDecision]:
+        """Ticks on the Calendar's approve/reject columns. A Calendar from before those columns
+        existed simply has none (`dk sheet init` adds them)."""
+        index = self._headers.get(CALENDAR) or {}
+        needed = ("post_key", "platform", "account", "approve", "reject")
+        if any(name not in index for name in needed):
+            return []
+        found: list[CalendarDecision] = []
+        for offset, values in enumerate(self._existing.get(CALENDAR, [])[1:], start=2):
+            approve, reject = (_at(values, index[n]) is True for n in ("approve", "reject"))
+            if approve or reject:
+                found.append(
+                    CalendarDecision(
+                        row=offset,
+                        post_key=str(_at(values, index["post_key"]) or ""),
+                        platform=str(_at(values, index["platform"]) or ""),
+                        account=str(_at(values, index["account"]) or ""),
+                        approve=approve,
+                        reject=reject,
+                    )
+                )
+        return found
 
     def _parse_tab(
         self, tab: str, columns: Sequence[Column], grid: list[list[Any]], out: SheetSnapshot
@@ -241,6 +266,11 @@ class GoogleSheetGateway:
                 ("title", e.title),
                 ("status", e.status),
                 ("source", e.source),
+                ("format", e.format),
+                ("caption", e.caption),
+                ("media", e.media),
+                ("by", e.by),
+                ("note", e.note),
             ):
                 if name in index:
                     line[index[name]] = value
@@ -295,7 +325,7 @@ def _serial(moment: datetime) -> float:
 
 
 def _norm(value: Any) -> str:
-    if value is None or value == "":
+    if value is None or value == "" or value is False:  # an unticked box reads back as FALSE
         return ""
     if isinstance(value, float):
         return f"{value:.6f}"
