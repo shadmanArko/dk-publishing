@@ -75,5 +75,10 @@ fi
 docker compose -f compose.prod.yaml --env-file .env ps
 echo "==> checking the configuration inside the container (posts nothing)"
 docker compose -f compose.prod.yaml --env-file .env run --rm --no-deps -T webserver dk check-setup </dev/null || true
+# Every build leaves cache behind (26 GB after a few weeks on this shared server). Drop what is older
+# than a day: today's cache keeps the next deploy fast, and running containers are never touched.
+echo "==> cleaning old build cache"
+docker builder prune -f --filter until=24h | tail -1 || true
+df -h / | tail -1
 REMOTE_SCRIPT
 echo "Done. Look at Dagster with:  ssh -L 3000:localhost:3000 $HOST   then open http://localhost:3000"

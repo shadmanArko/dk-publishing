@@ -96,6 +96,7 @@ Everything in the row above, plus:
 ### Deployment, server or domain
 - `deploy/compose.prod.yaml`, `deploy/Caddyfile`, `deploy/deploy.sh`, `Dockerfile`, `docs/setup/deploy.md`
 - The shared server's Caddyfile (back it up, `caddy validate`, then reload). Compose project name must stay `dk-publishing`
+- `deploy/deploy.sh` prunes build cache older than a day after every deploy (the disk is shared with the ordering system); keep that step
 
 ### Telegram messages or alerts
 - `src/dk_publishing/application/use_cases/alerts.py`, `health.py`, `src/dk_publishing/adapters/notify/`

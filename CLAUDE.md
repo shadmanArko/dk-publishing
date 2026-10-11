@@ -137,3 +137,6 @@ from the code. When you add a new kind of change, add a row to the map.
 - **Run monitoring is on** (`dagster/dagster.*.yaml`): a run killed mid-start/mid-run by a deploy is failed after ~3 min instead of
   sitting in `starting` and blocking the one-sync-at-a-time limit (found on the first deploy of ADR 0022). Do not turn it off; a
   stuck run by hand: `DagsterInstance.get().report_run_failed(run)` inside the webserver container.
+- **Server disk is shared and small.** Docker build cache grew to 26 GB in a month (disk 66%); `deploy/deploy.sh` now prunes
+  cache older than 24 h after each deploy. Old unused images (~26 GB) are not pruned automatically: they may be the ordering
+  system's rollback images, so ask before `docker image prune`.
