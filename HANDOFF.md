@@ -8,6 +8,9 @@ into chat; tell them to edit files or use their own terminal.
 Start the new session in: `/Users/shadman.arko/Documents/Work_DoNotTouch/Dhaka Kacchi/dk-publishing`
 (git branch `main`, last commits: webhooks (deployed, migration 0010 applied) and the JSON-label fix for `/v1/webhooks`; this file is tracked since commit `98462c0`; keep it updated).
 
+**Working across repos?** The combined handoff for this repo and dk-intelligence (its agents use this API and MCP
+endpoint) is `docs/SESSION_HANDOFF.md` in the private dk-intelligence repo.
+
 ## The project in one paragraph
 `dk-publishing` is a business-agnostic social publishing pipeline for Dhaka Kacchi (a food business, Berlin):
 Google Sheet + Drive folder (input) and an HTTP API (for other software) -> Postgres -> Dagster -> platform adapters.
