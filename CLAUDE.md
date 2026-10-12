@@ -140,6 +140,15 @@ from the code. When you add a new kind of change, add a row to the map.
 - **Server disk is shared and small.** Docker build cache grew to 26 GB in a month (disk 66%); `deploy/deploy.sh` now prunes
   cache older than 24 h after each deploy. Old unused images (~26 GB) are not pruned automatically: they may be the ordering
   system's rollback images, so ask before `docker image prune`.
+- **Daily review page** (ADR 0025, `domain/review.py` tokens, `application/use_cases/daily_review.py`,
+  `entrypoints/publish_api/review.py` + `review_pages.py`): `/review` is the owner's page to watch and approve a day's agent
+  drafts. Every button goes through `review_drafts` (the Calendar's function): never add a second approval path, and never an
+  approve right for agent keys. Access is a signed 24 h link (digest line, `dk review link`) traded for a 12 h `HttpOnly`
+  cookie; POSTs need the session's form token. The page exists only when `dk.json` has `review.secret` (32+ chars, made by
+  `dk review init`, shipped by `make deploy-secrets`) and an https `review.public_base_url`; otherwise its routes are not
+  registered (404), the digest has no line and the Calendar no `watch` links. Routes stay out of `/openapi.json`. Never log a
+  link, cookie or the secret (the `uvicorn.access` filter cuts the query off the sign-in address). Media previews reuse
+  `PublicMediaStore` links, not a new file route. `check-setup` only ever WARNs about it (a FAIL would page nightly).
 - **Webhooks** (ADR 0023, `application/use_cases/webhooks.py`, `adapters/notify/webhooks.py`): events come from `variant_events` of
   `source='agent'` posts and are queued then sent by the `send_webhooks` run (sensor `webhook_delivery`), never on the publishing
   path. At-least-once with a stable `evt_<variant>_<seq>` id, 7 attempts, signed `X-DK-Signature`, public https hosts only with the

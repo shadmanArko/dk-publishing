@@ -11,6 +11,9 @@ Start the new session in: `/Users/shadman.arko/Documents/Work_DoNotTouch/Dhaka K
 **Working across repos?** The combined handoff for this repo and dk-intelligence (its agents use this API and MCP
 endpoint) is `docs/SESSION_HANDOFF.md` in the private dk-intelligence repo.
 
+**Update 2026-10-12 (milestone S3, "approval at scale"):** the daily review page is built and merged, **not deployed**
+(ADR 0025). Until the owner runs `docs/runbooks/review-page.md` it does not exist on the server. See the table row and open item 0.
+
 ## The project in one paragraph
 `dk-publishing` is a business-agnostic social publishing pipeline for Dhaka Kacchi (a food business, Berlin):
 Google Sheet + Drive folder (input) and an HTTP API (for other software) -> Postgres -> Dagster -> platform adapters.
@@ -34,7 +37,8 @@ It runs on the owner's Contabo VPS (`13.140.191.102`, shared with their live ord
 | Server disk | 42% (was 66%): ran `docker builder prune` (freed ~22 GB); `deploy.sh` now prunes cache older than 24 h each deploy. ~26 GB of old unused Docker images remain: do NOT prune without asking (may be the ordering system's) |
 | Webhooks (ADR 0023) | **live and verified end to end** (2026-10-11: registered a receiver, `ping` 200, a rejected draft produced a signed `post.cancelled` delivered on attempt 1; test key and webhook removed). `/v1/webhooks` (register/list/delete/deliveries/ping), signed at-least-once delivery from a separate Dagster run (`send_webhooks`, sensor `webhook_delivery`), `dk api webhooks` / `dk api webhook-disable`. Guide 02 section 5b documents it |
 | Contract, status, batches, MCP (ADR 0024) | **live since 2026-10-12** (PR #1; owner smoke test: no key 401, a read key lists exactly the 4 read tools; test key revoked). `GET /v1/spec` (every rule a post must meet, versioned, JSON Schema per format), `GET /v1/overview` + `/v1/calendar` (every post, the Sheet's too), `POST /v1/posts/batch` (up to 20, always drafts, links allowed), MCP at `/mcp/` (same keys; 4 read tools, 2 draft tools, no approve). Opt-in: `"mcp": {"enabled": true}` in dk.json. Deploy steps: ADR 0024 / guide 02 section 5f |
-| Tests | 1233 passed, 97% coverage. Eval (docs/evals/2026-10-12-publishing-mcp.md): batch of 6 by code = 0 AI tokens; an agent over MCP did 6/6 jobs right, 51k tokens in all |
+| Daily review page (ADR 0025), milestone S3 | **Built, merged, not deployed.** `/review` shows a day's agent drafts by idea with the video playing, and approves/rejects per platform, per idea or all through `review_drafts` (the Calendar's function). Owner-only: signed 24 h link in the 08:00 digest (or `dk review link` in the api container) traded for a 12 h cookie. Off unless `dk.json` has `review.secret` + `review.public_base_url` (`dk review init` makes them). New Calendar column `watch` (needs `make sheet-init`). Owner steps: `docs/runbooks/review-page.md`. Guide 02 section 5g |
+| Tests | 1289 passed, 97% coverage. Eval (docs/evals/2026-10-12-publishing-mcp.md): batch of 6 by code = 0 AI tokens; an agent over MCP did 6/6 jobs right, 51k tokens in all |
 
 ## What the owner can do now (so you can answer questions)
 - **Post from the Sheet:** Drive file -> Posts row -> one row per platform tab -> tick `ready` (guide 01).
@@ -43,6 +47,7 @@ It runs on the owner's Contabo VPS (`13.140.191.102`, shared with their live ord
 - **Calendar tab** shows every post (human and agent) sorted by date with `source`, `by`, `note`.
 
 ## Open items (in my suggested order)
+0. **Switch on the review page** (owner): `docs/runbooks/review-page.md` (`dk review init`, `make deploy-secrets`, `make sheet-init`, then `dk review link` on the server). Then watch one morning's digest for the "Review today's posts" line.
 1. **Next content batch.** The plan ends 15 Oct. Ask for the posts file or themes and dates; import with
    `scripts/import_posting_plan.py` (see how the first batch was done; the Sheets write quota is 60/min and the importer paces it).
 2. **Owner to-dos:** untick `ready` on the stray `DK-TT-DEMO` Sheet row (1 Dec, TikTok, currently `draft`); switch the TikTok

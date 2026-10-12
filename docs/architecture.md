@@ -514,6 +514,8 @@ The hourly `refresh_tokens` job renews any token in its last fifth of life, usin
 
 Ticking Ready approves your own posts; agent-written posts wait for a tap in Telegram. Both routes end in the same `approved` state with a frozen snapshot, so the scheduler never knows or cares who wrote a post.
 
+As built: agent drafts are approved in the Sheet's Calendar tab ([ADR 0022](adr/0022-agent-posts-are-approved-in-the-calendar.md)) or on the owner's daily review page, where the videos play ([ADR 0025](adr/0025-daily-review-page-signed-link-and-session.md)). Both call the same `review_drafts` function.
+
 | Author | Enters through | Approval | Visible in |
 | --- | --- | --- | --- |
 | You | The Sheet | Ticking `ready` | Your platform tabs and the Calendar tab |
