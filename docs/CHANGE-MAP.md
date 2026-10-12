@@ -37,6 +37,9 @@ below are the rest.
 - A new MCP tool: its right in `READ_TOOLS` / `DRAFT_TOOLS`, guide 02 section 5f, `llms.txt` (MCP), the tests
 - Client settings: `src/dk_publishing/entrypoints/publish_mcp/clients.py`
 - Guide 02 (sections 5c to 5f) and `llms.txt`, then `make guides`
+- **Other software pins this API.** `/openapi.json` and `/v1/spec` are contracts that dk-intelligence pins and tests
+  against (its `contracts/registry.yaml`). Add fields; never rename or remove one. A breaking change needs a new
+  version (`publishing-spec/v2`) and a heads-up there, so it re-pins with `intel contracts sync`
 
 ### A new platform
 Everything in the row above, plus:
