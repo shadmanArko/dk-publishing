@@ -52,9 +52,10 @@ MAX_ANSWER = 32_000  # characters; a list longer than this is cut and says so
 INSTRUCTIONS = """Social publishing for one business: where posts stand, the rules every post must
 meet, and handing over posts as drafts a person approves.
 - Questions about status: publishing_overview first (one call), list_posts for details.
-- Before making content: publishing_spec(platform, format) gives the exact rules and an example.
-- Handing over posts: upload files with POST /v1/media (or use public https links), check with
-  submit_posts(dry_run=true), then submit_posts. Every post waits for a person's approval.
+- Before MAKING content: publishing_spec(platform, format) gives the exact rules and an example.
+- Handing over content you already have: call submit_posts directly. It creates only the posts
+  that pass; each refused one comes back with what to fix and a valid example (and is not
+  created). Files: POST /v1/media ids or public https links. Every post waits for approval.
 - Never resend a post whose state is `checking`. To change a post: cancel it, submit a new one."""
 
 PROMPT = "publish_posts"
@@ -292,10 +293,11 @@ def build_mcp(
         ],
         dry_run: Annotated[bool, Field(description="True: check only, create nothing.")] = False,
     ) -> dict[str, Any]:
-        """Use when: handing over posts. Checks (dry_run=true) or creates up to 20 posts in one
-        call, each on its own; every post becomes a draft a person approves. media: ids from
-        POST /v1/media, or public https links. Same post_key + same content = the same post (safe
-        to resend). Each result: ok, the post's state, or problems with a valid example."""
+        """Use when: handing over posts. Creates up to 20 posts in one call, each on its own: only
+        valid posts are created, each as a draft a person approves (dry_run=true: check only).
+        media: ids from POST /v1/media, or public https links. Same post_key + same content =
+        the same post (safe to resend). Each result: ok, the post's state, or problems with a
+        valid example."""
         name = key_name()
         try:
             body = BatchIn.model_validate({"posts": posts, "dry_run": dry_run})
@@ -334,9 +336,9 @@ def build_mcp(
             f"1. Call publishing_spec(platform='{platform}') and keep to its rules and example.\n"
             "2. Files are uploaded by code with POST /v1/media (or are public https links); use "
             "their ids. Never put file contents in a message.\n"
-            "3. Call submit_posts(posts, dry_run=true). Fix every problem it lists.\n"
-            "4. Call submit_posts(posts). Each post waits for approval in the Calendar.\n"
-            "5. Report each post_key with its state. Never resend a post that is `checking`."
+            "3. Call submit_posts(posts). Only valid posts are created; fix each refused one\n"
+            "   from its problems and example, and send just those again (same post_key is safe).\n"
+            "4. Report each post_key with its state. Never resend a post that is `checking`."
         )
 
     return mcp

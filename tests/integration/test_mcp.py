@@ -117,7 +117,7 @@ def test_the_contract_and_guide_are_resources_and_the_prompt_lists_the_steps(rig
     assert len(json.loads(spec[0].text)["spec_version"]) == 16
     assert "POST /v1/posts" in guide[0].text
     text = prompt.messages[0].content.text
-    assert "dry_run=true" in text and "checking" in text
+    assert "Only valid posts are created" in text and "checking" in text
 
 
 def test_an_agent_connects_over_http_with_its_key(rig: Rig) -> None:
