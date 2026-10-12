@@ -120,6 +120,14 @@ Only a hash of the key is stored. On the server, run these with
    ```
 4. `curl https://publish.yourbusiness.com/healthz` answers `{"status":"ok"}`.
 
+## The contract, status and batches (ADR 0024)
+
+- `GET /v1/spec`: every rule a post must meet, built from the checking code, versioned (`spec_version`, ETag).
+- `GET /v1/overview`, `GET /v1/calendar`: where publishing stands, for every post including the Sheet's.
+- `POST /v1/posts/batch`: up to 20 posts in one call, each on its own, always drafts.
+- `/mcp/`: the same for AI agents over MCP, with the same keys (no approve tool). Switch on with
+  `"mcp": {"enabled": true}` in `dk.json`; `dk api mcp-config --client ...` prints client settings.
+
 ## Not in this version
 
-Editing a post in place (cancel and resubmit), per-key rate limits and an MCP wrapper for AI agents.
+Editing a post in place (cancel and resubmit), per-key rate limits on the HTTP API.

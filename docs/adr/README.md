@@ -28,3 +28,4 @@ Each file records one decision so a later change argues against the original rea
 | 21 | [Media is deleted when no post needs it, and uploads have limits](0021-media-retention-and-upload-limits.md) |
 | 22 | [Posts from the API are approved in the Sheet's Calendar tab](0022-agent-posts-are-approved-in-the-calendar.md) |
 | 23 | [Webhooks tell API clients when their posts change state](0023-webhooks-for-api-clients.md) |
+| 24 | [One publishing contract, status for every post, batches, and an MCP endpoint](0024-publishing-contract-status-batch-and-mcp.md) |

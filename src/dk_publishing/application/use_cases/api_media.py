@@ -13,3 +13,14 @@ def register_media(api: ApiServices, stored: StoredFile, *, created_by: str) -> 
         )
         uow.commit()
     return UploadedMedia(media_id, stored.filename, stored.sha256, stored.size)
+
+
+def fetch_media(
+    api: ApiServices, url: str, filename: str | None, *, created_by: str
+) -> UploadedMedia:
+    """Download a public https file within the key's allowance and register it. Raises
+    IntakeRejected (a refused link, type, size, quota or a full disk)."""
+    from dk_publishing.application.use_cases.media_retention import upload_allowance
+
+    stored = api.intake.fetch(url, filename, upload_allowance(api, created_by))
+    return register_media(api, stored, created_by=created_by)

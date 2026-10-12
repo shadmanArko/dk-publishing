@@ -116,6 +116,16 @@ def _run(argv: Sequence[str] | None = None) -> int:
         "approve", help="approve a post a client submitted as a draft"
     )
     approve.add_argument("post_key")
+    spec = api_commands.add_parser(
+        "spec", help="print the publishing contract (what every platform accepts) as JSON"
+    )
+    spec.add_argument("--platform", help="only this platform")
+    spec.add_argument("--format", dest="fmt", help="only this format (needs --platform)")
+    mcp = api_commands.add_parser(
+        "mcp-config", help="settings to connect an agent to the MCP endpoint (no key inside)"
+    )
+    mcp.add_argument("--client", default="claude-code", help="claude-code, claude-desktop, ...")
+    mcp.add_argument("--site", default="", help="the API domain; default: API_SITE")
     serve = api_commands.add_parser("serve", help="run the API server")
     serve.add_argument("--host", default="127.0.0.1")
     serve.add_argument("--port", type=int, default=8000)
@@ -155,6 +165,8 @@ def _run(argv: Sequence[str] | None = None) -> int:
         return _telegram(args.telegram_command)
     if args.command == "meta":
         return _meta(args.meta_command, force=getattr(args, "force", False))
+    if args.command == "api" and args.api_command == "mcp-config":
+        return _api(args, "")  # prints settings only: needs no database
 
     database_url = _env().get("DATABASE_URL", "").strip()
     if not database_url:
@@ -446,6 +458,19 @@ def _api(args: argparse.Namespace, database_url: str) -> int:
     from dk_publishing.application.use_cases.api_posts import ApiError
 
     command = args.api_command
+    if command == "mcp-config":
+        from dk_publishing.entrypoints.publish_mcp.clients import CLIENTS, client_config, endpoint
+
+        if args.client not in CLIENTS:
+            print(f"[FAIL] --client must be one of: {', '.join(CLIENTS)}", file=sys.stderr)
+            return 1
+        url = endpoint(args.site or _env().get("API_SITE", ""))
+        print(client_config(args.client, url))
+        print(
+            "Create the key in your own terminal: dk api key-create NAME --right draft (or read),"
+        )
+        print("then export DK_PUBLISH_KEY=... in the shell or tool that runs the agent.")
+        return 0
     if command == "serve":
         import uvicorn
 
@@ -486,6 +511,13 @@ def _api(args: argparse.Namespace, database_url: str) -> int:
         done = composition.disable_webhook(database_url, args.id, "Disabled by the owner.")
         print("disabled" if done else "no active webhook with that id")
         return 0 if done else 1
+    if command == "spec":
+        try:
+            print(composition.publishing_spec(database_url, _env(), args.platform, args.fmt))
+        except ApiError as exc:
+            print(f"[FAIL] {exc.message}", file=sys.stderr)
+            return 1
+        return 0
     if command == "key-revoke":
         done = composition.revoke_api_key(database_url, args.name)
         print("revoked" if done else f"no active key called '{args.name}'")

@@ -62,7 +62,7 @@ class Hooks:
         self.rig.client = TestClient(create_app(self.rig.api))
         self.core = self.rig.api.core
 
-    def register(self, scope: str = "draft", url: str = URL, **body: Any) -> httpx.Response:
+    def register(self, scope: str = "draft", url: str = URL, **body: Any) -> Any:
         return self.rig.call("POST", "/v1/webhooks", scope, json={"url": url, **body})
 
     def secret(self, **body: Any) -> str:

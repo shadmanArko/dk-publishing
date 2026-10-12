@@ -30,7 +30,8 @@ It runs on the owner's Contabo VPS (`13.140.191.102`, shared with their live ord
 | Docs stay true | `docs/CHANGE-MAP.md` + `tests/unit/test_docs_in_sync.py` (fails `make check` when guides, `llms.txt`, Sheet text or PDFs drift from the code) |
 | Server disk | 42% (was 66%): ran `docker builder prune` (freed ~22 GB); `deploy.sh` now prunes cache older than 24 h each deploy. ~26 GB of old unused Docker images remain: do NOT prune without asking (may be the ordering system's) |
 | Webhooks (ADR 0023) | **live and verified end to end** (2026-10-11: registered a receiver, `ping` 200, a rejected draft produced a signed `post.cancelled` delivered on attempt 1; test key and webhook removed). `/v1/webhooks` (register/list/delete/deliveries/ping), signed at-least-once delivery from a separate Dagster run (`send_webhooks`, sensor `webhook_delivery`), `dk api webhooks` / `dk api webhook-disable`. Guide 02 section 5b documents it |
-| Tests | 1157 passed, 97% coverage |
+| Contract, status, batches, MCP (ADR 0024) | **built on branch `feat/publishing-contract-mcp`, not deployed.** `GET /v1/spec` (every rule a post must meet, versioned, JSON Schema per format), `GET /v1/overview` + `/v1/calendar` (every post, the Sheet's too), `POST /v1/posts/batch` (up to 20, always drafts, links allowed), MCP at `/mcp/` (same keys; 4 read tools, 2 draft tools, no approve). Opt-in: `"mcp": {"enabled": true}` in dk.json. Deploy steps: ADR 0024 / guide 02 section 5f |
+| Tests | 1233 passed, 97% coverage. Eval (docs/evals/2026-10-12-publishing-mcp.md): batch of 6 by code = 0 AI tokens; an agent over MCP did 6/6 jobs right, 51k tokens in all |
 
 ## What the owner can do now (so you can answer questions)
 - **Post from the Sheet:** Drive file -> Posts row -> one row per platform tab -> tick `ready` (guide 01).
@@ -45,7 +46,7 @@ It runs on the owner's Contabo VPS (`13.140.191.102`, shared with their live ord
    account back to public; delete test posts on platforms; old `invalid` rows `DK-TEST-1/-3/-YT-1` are harmless leftovers.
 3. **Which new platform?** LinkedIn / X / Reddit: wait for the answer; do not start building without it.
 4. **Performance report** (views/likes/reach by platform, format, time). Offered, unanswered; do it after a few more days of data.
-5. Not built: editing a post in place (cancel and resubmit today), per-key rate limiting (reverse proxy), MCP wrapper for agents,
+5. Not built: editing a post in place (cancel and resubmit today), per-key rate limiting on the HTTP API (MCP has one),
    token vault, TikTok/LinkedIn/X/Reddit adapters. Known limits: DNS-rebinding window in the URL fetcher (ADR 0020).
 6. Verify the TikTok hand-over card fix (videos up to 49 MiB attached, else a 24 h download link) on a slot.
 7. Optional: let the owner decide about `docker image prune` (26 GB) if disk climbs again.

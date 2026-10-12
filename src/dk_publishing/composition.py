@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Mapping, Sequence
+from dataclasses import replace
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -18,6 +19,7 @@ from dk_publishing.adapters.media.drive_catalog import DriveCatalog, sheet_modif
 from dk_publishing.adapters.media.drive_store import DriveMediaStore, GoogleDriveDownloader
 from dk_publishing.adapters.media.janitor import MediaDiskJanitor
 from dk_publishing.adapters.media.public import PublicMediaStore
+from dk_publishing.adapters.media.uploads import ALLOWED as UPLOAD_TYPES
 from dk_publishing.adapters.media.uploads import (
     DEFAULT_MAX_BYTES,
     CompositeMediaStore,
@@ -50,6 +52,7 @@ from dk_publishing.adapters.platforms.dk_file import (
     resolve_env,
 )
 from dk_publishing.adapters.platforms.dry_run import DryRunPublisher, PostgresLedger
+from dk_publishing.adapters.platforms.facts import FACTS
 from dk_publishing.adapters.platforms.guides import GUIDES
 from dk_publishing.adapters.platforms.live import build_live_publisher, public_media
 from dk_publishing.adapters.platforms.live_test import LiveTestResult, run_live_test
@@ -576,6 +579,13 @@ def build_api_services(
         core=build_services(database_url, platforms_config, env, transport),
         guides={name: GUIDES[name] for name in modes},
         modes=modes,
+        facts={
+            name: replace(FACTS[name], api_version=settings[name].api_version)
+            for name in modes
+            if name in FACTS
+        },
+        max_upload_bytes=limit,
+        upload_types=UPLOAD_TYPES,
         intake=UploadStore(media_folder(env), max_bytes=limit),
         notifier=build_notifier(env, transport),
         tenant_id=tenant_id,
@@ -584,6 +594,18 @@ def build_api_services(
         key_quota_bytes=_whole(env, "API_KEY_QUOTA_MB", DEFAULT_KEY_QUOTA_MB) * 1024**2,
         disk_stop_percent=_whole(env, "MEDIA_DISK_STOP_PERCENT", STOP_PERCENT),
     )
+
+
+def publishing_spec(
+    database_url: str, env: Mapping[str, str], platform: str | None, fmt: str | None
+) -> str:
+    """The publishing contract as JSON text, as `GET /v1/spec` serves it."""
+    import json
+
+    from dk_publishing.application.use_cases.publishing_spec import build_spec, spec_slice
+
+    spec = spec_slice(build_spec(build_api_services(database_url, env)), platform, fmt)
+    return json.dumps(spec, indent=2, ensure_ascii=False)
 
 
 DEFAULT_KEY_QUOTA_MB = 5120

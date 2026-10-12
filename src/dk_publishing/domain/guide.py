@@ -27,6 +27,7 @@ class MediaGuide:
     max: int
     types: tuple[str, ...] = ()
     note: str = ""
+    max_bytes: int | None = None  # per file; checked when a post is submitted
 
 
 @dataclass(frozen=True, slots=True)
