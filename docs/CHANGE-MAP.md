@@ -28,8 +28,19 @@ below are the rest.
 - Tests: the platform's file in `tests/unit/` (named after the platform), `tests/contract/` (the contract suite), `tests/unit/test_guides.py`
 - `dk live-test` branch in `src/dk_publishing/adapters/platforms/live_test.py` if posting changed
 
+### The publishing contract, status, batches or the MCP endpoint (ADR 0024)
+- The contract: `src/dk_publishing/application/use_cases/publishing_spec.py` (states, post and upload rules),
+  `src/dk_publishing/domain/spec.py` (the JSON Schema), `src/dk_publishing/adapters/platforms/facts.py` (route, quotas)
+- Status: `src/dk_publishing/application/use_cases/publishing_status.py`; batches: `src/dk_publishing/application/use_cases/api_batch.py`
+- The HTTP routes in `src/dk_publishing/entrypoints/publish_api/app.py` and the MCP tools in
+  `src/dk_publishing/entrypoints/publish_mcp/server.py`: one use case each, the same JSON (`tests/integration/test_mcp.py` proves it)
+- A new MCP tool: its right in `READ_TOOLS` / `DRAFT_TOOLS`, guide 02 section 5f, `llms.txt` (MCP), the tests
+- Client settings: `src/dk_publishing/entrypoints/publish_mcp/clients.py`
+- Guide 02 (sections 5c to 5f) and `llms.txt`, then `make guides`
+
 ### A new platform
 Everything in the row above, plus:
+- Its route and quotas in `src/dk_publishing/adapters/platforms/facts.py`
 - `config/platforms.yaml` (starts as `dry_run`), `src/dk_publishing/adapters/platforms/registry.py` and `live.py`
 - `src/dk_publishing/composition.py` (wiring, account creation), a `dk.json` section in `src/dk_publishing/adapters/platforms/dk_file.py`
 - `src/dk_publishing/adapters/platforms/setup_check.py` (a `check-setup` line) and a guide in `docs/setup/`

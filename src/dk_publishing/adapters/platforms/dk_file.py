@@ -49,6 +49,11 @@ TEMPLATE: dict[str, Any] = {
         "refresh_token": "",
         "channel_id": "",
     },
+    "mcp": {
+        "_help": "The MCP endpoint for AI agents at /mcp/ (ADR 0024). Same keys as the API.",
+        "enabled": False,
+        "disabled_tools": "",
+    },
     "telegram": {
         "_help": "Alerts and the morning digest. docs/setup/telegram.md",
         "bot_token": "",
@@ -89,6 +94,8 @@ _VALUES = {
     ("media", "public_base_url"): "PUBLIC_MEDIA_BASE_URL",
     ("media", "public_dir"): "PUBLIC_MEDIA_DIR",
     ("media", "work_dir"): "MEDIA_DIR",
+    ("mcp", "enabled"): "MCP_ENABLED",  # true: serve the MCP endpoint at /mcp/ (ADR 0024)
+    ("mcp", "disabled_tools"): "MCP_DISABLED_TOOLS",  # comma-separated tool names to switch off
 }
 _SECTIONS = {
     "meta": "META_CREDENTIALS_FILE",

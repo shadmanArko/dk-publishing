@@ -43,9 +43,10 @@ class Rig:
             for scope in api_keys.SCOPES
         }
 
-    def call(self, method: str, path: str, scope: str = "draft", **kw: Any) -> httpx.Response:
+    def call(self, method: str, path: str, scope: str = "draft", **kw: Any) -> Any:
+        """The test client's response (httpx's, or httpx2's once the MCP client installs it)."""
         headers = {"Authorization": f"Bearer {self.keys[scope]}"}
-        return self.client.request(method, path, headers=headers, **kw)  # type: ignore[no-any-return]
+        return self.client.request(method, path, headers=headers, **kw)
 
     def upload(self, name: str = "reel.mp4", data: bytes = b"video-bytes") -> str:
         response = self.call("POST", f"/v1/media?filename={name}", content=data)
@@ -63,7 +64,7 @@ class Rig:
         }
         return {"post_key": key, "variants": [variant], **more}
 
-    def post(self, body: dict[str, Any], scope: str = "draft") -> httpx.Response:
+    def post(self, body: dict[str, Any], scope: str = "draft") -> Any:
         return self.call("POST", "/v1/posts", scope, json=body)
 
 

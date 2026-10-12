@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from dk_publishing.application.ports import (
     Clock,
@@ -16,6 +16,7 @@ from dk_publishing.application.ports import (
     WebhookSender,
 )
 from dk_publishing.domain.guide import PlatformGuide
+from dk_publishing.domain.spec import PlatformFacts
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,3 +55,8 @@ class ApiServices:
     key_quota_bytes: int = 0  # most one key may keep on the server; 0 = no limit
     disk_stop_percent: int = 85  # uploads are refused from this fill level
     webhooks: WebhookSender | None = None  # None: webhooks are off
+    facts: Mapping[str, PlatformFacts] = field(
+        default_factory=dict
+    )  # route and quotas per platform
+    max_upload_bytes: int = 0  # largest file the API takes; 0 = not stated
+    upload_types: tuple[str, ...] = ()  # file extensions the API takes

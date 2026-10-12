@@ -206,7 +206,7 @@ def request_hash(request: PostRequest) -> str:
 
 
 def _normal_slot(text: str | None) -> str | None:
-    parsed = _utc(text)
+    parsed = utc_time(text)
     return parsed.isoformat() if parsed else text
 
 
@@ -308,6 +308,7 @@ def _check_variant(
 
     account = _account(variant, accounts, base, problems)
     media = _media(variant, uploaded, base, problems)
+    _sizes(media, fmt, base, problems)
     publish_at = _slot(variant, now, base, problems)
 
     # Ask the platform's own rules too, so one round trip reports everything that is wrong. They
@@ -430,7 +431,30 @@ def _media(
     return items
 
 
-def _utc(text: str | None) -> datetime | None:
+def _sizes(
+    media: Sequence[Mapping[str, Any]], fmt: FormatGuide, base: str, problems: list[Problem]
+) -> None:
+    """A file over the format's size limit is refused now, not when it is uploaded at the slot."""
+    limit = fmt.media.max_bytes
+    if limit is None:
+        return
+    for position, item in enumerate(media):
+        size = int(item.get("size") or 0)
+        if size > limit:
+            problems.append(
+                Problem(
+                    f"{base}.media[{position}]",
+                    "file_too_large",
+                    f"{item.get('name')} is {size:,} bytes; this format takes at most "
+                    f"{limit:,} bytes per file.",
+                    limit=limit,
+                    actual=size,
+                )
+            )
+
+
+def utc_time(text: str | None) -> datetime | None:
+    """An ISO 8601 date-time with an offset, in UTC; None for anything else."""
     if not text:
         return None
     try:
@@ -455,7 +479,7 @@ def _slot(
             )
         )
         return None
-    parsed = _utc(variant.slot)
+    parsed = utc_time(variant.slot)
     if parsed is None:
         problems.append(
             Problem(
@@ -698,7 +722,8 @@ def cancel_post(api: ApiServices, post_key: str, *, actor_name: str) -> PostView
 
 
 def get_post(api: ApiServices, post_key: str) -> PostView:
-    return _view(api, post_key)
+    """Any post, the Sheet's too (reading only: changing stays limited to the API's own posts)."""
+    return _view(api, post_key, own=False)
 
 
 def list_posts(api: ApiServices, limit: int = 50) -> list[PostView]:
@@ -711,7 +736,9 @@ def list_posts(api: ApiServices, limit: int = 50) -> list[PostView]:
     return [_build(p, [v for v in variants if v.post_key == p.post_key], contents) for p in stored]
 
 
-def _own_post(api: ApiServices, post_key: str) -> tuple[StoredPost, list[SyncVariant]]:
+def _own_post(
+    api: ApiServices, post_key: str, *, own: bool = True
+) -> tuple[StoredPost, list[SyncVariant]]:
     with api.core.uow() as uow:
         post = uow.api.post(api.tenant_id, post_key)
         variants = (
@@ -719,15 +746,15 @@ def _own_post(api: ApiServices, post_key: str) -> tuple[StoredPost, list[SyncVar
         )
     if post is None:
         raise ApiError("not_found", f"No post '{post_key}'.")
-    if post.source != "agent":
+    if own and post.source != "agent":
         raise ApiError("conflict", "That post belongs to the Google Sheet, not to the API.")
     return post, variants
 
 
-def _view(api: ApiServices, post_key: str) -> PostView:
-    post, variants = _own_post(api, post_key)
+def _view(api: ApiServices, post_key: str, *, own: bool = True) -> PostView:
+    post, variants = _own_post(api, post_key, own=own)
     with api.core.uow() as uow:
-        contents = {v.variant.id: uow.api.content(v.variant.id) for v in variants}
+        contents = {v.variant.id: uow.api.content(v.variant.id) or v.content for v in variants}
     return _build(post, variants, contents)
 
 

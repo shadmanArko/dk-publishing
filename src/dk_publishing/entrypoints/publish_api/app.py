@@ -12,7 +12,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Annotated, Any, cast
 
-from fastapi import Depends, FastAPI, Request, Response
+from fastapi import Depends, FastAPI, Query, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel, ConfigDict, Field
@@ -29,6 +29,7 @@ from dk_publishing.application.ports import (
 from dk_publishing.application.services import ApiServices
 from dk_publishing.application.use_cases import api_keys
 from dk_publishing.application.use_cases import webhooks as hooks
+from dk_publishing.application.use_cases.api_batch import MAX_BATCH, BatchItem, submit_batch
 from dk_publishing.application.use_cases.api_media import register_media
 from dk_publishing.application.use_cases.api_posts import (
     ApiError,
@@ -46,6 +47,8 @@ from dk_publishing.application.use_cases.api_posts import (
     validate_post,
 )
 from dk_publishing.application.use_cases.media_retention import upload_allowance
+from dk_publishing.application.use_cases.publishing_spec import build_spec, spec_slice
+from dk_publishing.application.use_cases.publishing_status import calendar, overview
 from dk_publishing.domain.guide import FieldGuide, FormatGuide, PlatformGuide
 
 PROBLEM = "application/problem+json"
@@ -74,7 +77,7 @@ class _Unauthorized(Exception):
     pass
 
 
-JSON_BODY_PATHS = ("/v1/posts", "/v1/posts/validate", "/v1/webhooks")
+JSON_BODY_PATHS = ("/v1/posts", "/v1/posts/validate", "/v1/posts/batch", "/v1/webhooks")
 GUESSED_TYPES = (b"", b"application/x-www-form-urlencoded", b"text/plain")
 
 
@@ -147,6 +150,17 @@ class PostIn(BaseModel):
     )
 
 
+class BatchIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    posts: list[PostIn] = Field(description=f"1 to {MAX_BATCH} posts; each is handled on its own.")
+    dry_run: bool = Field(
+        default=False,
+        description="True: check every post and create nothing (linked files are downloaded so "
+        "they can be checked).",
+    )
+
+
 class WebhookIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -190,6 +204,32 @@ def post_json(view: PostView) -> dict[str, Any]:
     for variant in data["variants"]:
         variant["slot"] = variant["slot"].isoformat()
     return cast(dict[str, Any], _clean(data))
+
+
+def batch_json(items: list[BatchItem], dry_run: bool, spec_version: str) -> dict[str, Any]:
+    """One answer per post, in the order sent. The same shape over HTTP and MCP."""
+    results = [
+        _clean_dict(
+            {
+                "post_key": i.post_key,
+                "ok": i.ok,
+                "replayed": i.replayed or None,
+                "post": post_json(i.post) if i.post else None,
+                "error": i.error,
+                "message": i.message,
+                "problems": [problem_json(p) for p in i.problems],
+                "examples": dict(i.examples) if i.examples else None,
+            }
+        )
+        for i in items
+    ]
+    return {
+        "dry_run": dry_run,
+        "spec_version": spec_version,
+        "ok": sum(i.ok for i in items),
+        "failed": sum(not i.ok for i in items),
+        "results": results,
+    }
 
 
 def endpoint_json(e: WebhookEndpoint) -> dict[str, Any]:
@@ -282,8 +322,10 @@ def problem_response(
 # --- the app ----------------------------------------------------------------------------------
 
 
-def create_app(api: ApiServices) -> FastAPI:
+def create_app(api: ApiServices, mcp_app: Any = None) -> FastAPI:
+    """`mcp_app`: the MCP endpoint's ASGI app (with its lifespan), served at /mcp/ when given."""
     app = FastAPI(
+        lifespan=mcp_app.lifespan if mcp_app is not None else None,
         title="DK Publishing API",
         version="1.0",
         description=(
@@ -354,6 +396,9 @@ def create_app(api: ApiServices) -> FastAPI:
 
     # open --------------------------------------------------------------------------------
 
+    if mcp_app is not None:
+        app.mount("/mcp", mcp_app)
+
     @app.get("/healthz", include_in_schema=False)
     def healthz() -> dict[str, str]:
         return {"status": "ok"}
@@ -379,6 +424,46 @@ def create_app(api: ApiServices) -> FastAPI:
             if guide.platform == name:
                 return guide_json(guide, mode, accounts)
         raise ApiError("not_found", f"No platform '{name}' here. See GET /v1/platforms.")
+
+    @app.get("/v1/spec", summary="The publishing contract: everything a producer must know")
+    def spec(
+        request: Request,
+        response: Response,
+        _: Reader,
+        platform: str | None = None,
+        fmt: Annotated[str | None, Query(alias="format")] = None,
+    ) -> Any:
+        """Every rule a post must meet, per platform and format, with an example and a JSON Schema
+        for each. `spec_version` changes when anything in it does; it is also the ETag, so send
+        If-None-Match to get 304 when nothing changed."""
+        whole = build_spec(api)
+        etag = f'"{whole["spec_version"]}"'
+        if request.headers.get("if-none-match") == etag:
+            return Response(status_code=304, headers={"ETag": etag})
+        response.headers["ETag"] = etag
+        return spec_slice(whole, platform, fmt)
+
+    @app.get("/v1/overview", summary="Where publishing stands: pipeline, published, problems")
+    def status_overview(_: Reader, days_back: int = 7, days_ahead: int = 14) -> dict[str, Any]:
+        """Every post, the Google Sheet's too: what waits, what is coming, what went out in the
+        last `days_back` days, what needs a look, and the last slot that is planned."""
+        return overview(api, days_back, days_ahead)
+
+    @app.get("/v1/calendar", summary="Every post by slot; state=published is the history")
+    def status_calendar(
+        _: Reader,
+        state: str | None = None,
+        platform: str | None = None,
+        source: str | None = None,
+        start: Annotated[str | None, Query(alias="from")] = None,
+        end: Annotated[str | None, Query(alias="to")] = None,
+        limit: int = 50,
+    ) -> dict[str, Any]:
+        """Posts from the Sheet and the API, narrowed by state, platform, source (sheet, api)
+        and dates (ISO 8601 with an offset). Newest first when state=published."""
+        return calendar(
+            api, state=state, platform=platform, source=source, start=start, end=end, limit=limit
+        )
 
     @app.get("/v1/posts", summary="Posts made through the API, newest first")
     def posts(_: Reader, limit: int = 50) -> dict[str, Any]:
@@ -446,6 +531,16 @@ def create_app(api: ApiServices) -> FastAPI:
             response.status_code = 200
             response.headers["Idempotent-Replay"] = "true"
         return post_json(result.post)
+
+    @app.post("/v1/posts/batch", summary="Check or create up to 20 posts in one call (drafts)")
+    def batch(body: BatchIn, key: Drafter) -> dict[str, Any]:
+        """Each post is checked and created like POST /v1/posts, on its own: one bad post never
+        stops the others, and sending the same batch again is safe. Always drafts. A media entry
+        may be a media_id or a public https link (downloaded once)."""
+        items = submit_batch(
+            api, [_request(p) for p in body.posts], actor_name=key.name, dry_run=body.dry_run
+        )
+        return batch_json(items, body.dry_run, build_spec(api)["spec_version"])
 
     @app.post("/v1/posts/{post_key}/approve", summary="Approve a draft post")
     def approve(post_key: str, key: Approver) -> dict[str, Any]:

@@ -28,6 +28,23 @@ Send JSON bodies with `Content-Type: application/json` (a missing or form label 
 Authentication: header `Authorization: Bearer dkp_...` on every /v1 call. The owner issues keys with
 one of three rights: read < draft < approve. Draft keys create posts that wait for a person.
 
+5. Know the rules before making anything, follow every post, hand over many at once
+   GET  /v1/spec[?platform=&format=]   the whole contract: files, limits, options, accounts, timing, route,
+                                       an example and a JSON Schema per format. spec_version = ETag (304 if unchanged)
+   GET  /v1/overview                   every post (the Sheet's too): pipeline by state and platform, published,
+                                       problems, next slots, plan_ends (the last planned slot)
+   GET  /v1/calendar                   every post by slot; filters state, platform, source (sheet|api), from, to,
+                                       limit (<=200). state=published = the history, newest first, with live_url
+   POST /v1/posts/batch                {"posts": [...up to 20...], "dry_run": false}: each like POST /v1/posts,
+                                       on its own; always drafts; safe to resend; media may be https links
+
+## MCP (for AI agents)
+
+https://<this host>/mcp/ with the same Authorization header. Tools: publishing_overview, list_posts, get_post,
+publishing_spec (read key); submit_posts, cancel_post (draft key). No approve tool: a person approves.
+Resources dkp://spec and dkp://guide; prompt publish_posts. Files are never sent through MCP: upload them
+with POST /v1/media or use public https links.
+
 ## A post
 
 POST /v1/posts
@@ -80,7 +97,8 @@ Failures are RFC 9457 `application/problem+json`. Validation failures list EVERY
 required, too_many, too_long, not_allowed, unknown_platform, unknown_format, unknown_option, unknown_field,
 unknown_account, account_required, unknown_media, media_expired (the file was removed a week after its post
 finished: upload again), media_rejected (see `expected`), invalid_slot, slot_in_past, slot_too_far,
-duplicate_variant, post_key_taken, unsupported_type, too_large, empty, filename_required, bad_url, fetch_failed,
+duplicate_variant, post_key_taken, unsupported_type, too_large, file_too_large (a file over the format's
+max_bytes in GET /v1/spec), empty, filename_required, bad_url, fetch_failed,
 storage_full, quota_exceeded.
 
 Other statuses: 401 no/invalid key, 403 the key lacks the right, 404 unknown post, 409 conflict,

@@ -4,7 +4,8 @@ For: a developer building software against it, or an AI agent that schedules pos
 Base address: `https://publish.dhakakacchi.com`
 
 An agent can also read the short plain-text version at `GET /llms.txt` and the machine-readable contract at
-`GET /openapi.json` (interactive page: `/docs`). Neither needs a key.
+`GET /openapi.json` (interactive page: `/docs`). Neither needs a key. Every rule a post must meet is one document,
+`GET /v1/spec` (section 5c). AI agents can also connect over **MCP** at `/mcp/` with the same key (section 5f).
 
 ## 1. What it does, in one minute
 
@@ -351,6 +352,84 @@ export function valid(secret, header, rawBody /* Buffer */) {
 
 The owner can list every registered webhook with `dk api webhooks` and switch one off with `dk api webhook-disable ID`.
 
+## 5c. Build to the contract: `GET /v1/spec`
+
+One document holds every rule a post must meet, built from the same code that checks posts, so it is never out of
+date. Read it **before making content**: a media maker learns the file types, how many files and the largest size;
+a writer learns the caption and option limits; code learns the timing and how each platform is published.
+
+```bash
+curl -s "$API/v1/spec?platform=instagram&format=reel" -H "Authorization: Bearer $KEY"
+# -> {"spec_version": "3f1c...", "post": {...rules for every post...}, "upload": {...}, "states": {...},
+#     "platforms": {"instagram": {"mode": "live", "route": {...}, "accounts": [...], "timing": {...},
+#       "quotas": [...], "formats": {"reel": {"media": {"min": 1, "max": 1, "types": [".mp4", ".mov"]},
+#         "caption": {...}, "options": {...}, "example": {...}, "json_schema": {...}}}}}}
+```
+
+- Leave out `platform` and `format` for everything. A `read` key is enough.
+- `spec_version` changes when any rule, account or setting does. It is also the `ETag`: send
+  `If-None-Match: "<spec_version>"` and you get `304` when nothing changed, so a client can cache it.
+- `media.max_bytes` is checked when you submit: a bigger file is refused at once with `file_too_large`, not at the slot.
+- `json_schema` lets code check a variant offline. The API's own check (`dry_run` or `/v1/posts/validate`) stays the
+  authority: a few rules, such as a link counting as 23 characters, only the platform's check knows.
+- `states` says what every state means and what a client should do in it.
+- `dk api spec [--platform ... --format ...]` prints the same document from a terminal.
+
+## 5d. Many posts at once: `POST /v1/posts/batch`
+
+```bash
+curl -s "$API/v1/posts/batch" -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" \
+  -d '{"dry_run": true, "posts": [ {"post_key": "wk42-reel", "variants": [...]}, {"post_key": "wk42-text", "variants": [...]} ]}'
+# -> {"dry_run": true, "spec_version": "...", "ok": 1, "failed": 1,
+#     "results": [{"post_key": "wk42-reel", "ok": true}, {"post_key": "wk42-text", "ok": false, "problems": [...], "examples": {...}}]}
+```
+
+- Up to 20 posts, each exactly like `POST /v1/posts` and each **on its own**: one bad post never stops the others.
+- `dry_run: true` checks everything and creates nothing. Then send the same batch without it.
+- Sending the same batch again is safe: existing posts come back with `"replayed": true`.
+- A batch **always creates drafts**, whatever the key may do. A person approves them in the Calendar.
+- A `media` entry may be a `media_id` or a public `https://` link; the server downloads each link once per batch.
+
+## 5e. Where publishing stands: `GET /v1/overview` and `GET /v1/calendar`
+
+Both cover **every** post, the Google Sheet's too. A `read` key is enough; nothing can be changed through them.
+
+```bash
+curl -s "$API/v1/overview?days_back=7&days_ahead=14" -H "Authorization: Bearer $KEY"
+# -> {"pipeline": {"total": 28, "by_state": {"awaiting_approval": {...}, "scheduled": {"instagram": 9, ...}}},
+#     "published": {"total": 44, "by_platform": {...}}, "problems": [...], "next": [...5 slots...],
+#     "awaiting_approval": [...], "plan_ends": "2026-10-15T14:30:00+00:00", "note": "Nothing is scheduled after ..."}
+curl -s "$API/v1/calendar?state=published&platform=instagram&limit=20" -H "Authorization: Bearer $KEY"
+# -> {"total": 12, "limit": 20, "posts": [{"post_key", "platform", "account", "format", "state", "slot", "source",
+#                                          "by", "text", "live_url", "error"}, ...]}
+```
+
+`/v1/calendar` filters: `state`, `platform`, `source` (`sheet` or `api`), `from` and `to` (ISO 8601 with an offset)
+and `limit` (at most 200). `state=published` is the history, newest first, with live links. Posts are by slot
+otherwise. `GET /v1/posts/{post_key}` also shows a Sheet post (reading only: it cannot be cancelled here).
+
+## 5f. Connect an AI agent over MCP
+
+The same API, for agents that speak MCP (Claude Code, Claude Desktop, Cursor, LangChain, the OpenAI Agents SDK):
+`https://publish.dhakakacchi.com/mcp/` with the header `Authorization: Bearer <key>`. Same keys, same rights.
+
+| Tool | Right | What it does |
+| --- | --- | --- |
+| `publishing_overview` | read | `GET /v1/overview` |
+| `list_posts` | read | `GET /v1/calendar` |
+| `get_post` | read | `GET /v1/posts/{post_key}` |
+| `publishing_spec` | read | `GET /v1/spec` |
+| `submit_posts` | draft | `POST /v1/posts/batch` (always drafts) |
+| `cancel_post` | draft | `DELETE /v1/posts/{post_key}` |
+
+- Resources: `dkp://spec` (the whole contract) and `dkp://guide` (`/llms.txt`). Prompt: `publish_posts`.
+- There is **no approve tool**, whatever the key may do over HTTP. A person approves in the Calendar.
+- Files never travel through MCP: code uploads them with `POST /v1/media`, or a post names a public https link.
+- `dk api mcp-config --client claude-code` (or `claude-desktop`, `cursor`, `langchain`, `openai-agents`) prints the
+  settings to paste. The key appears only as the variable `DK_PUBLISH_KEY`, which you set yourself.
+- The owner switches MCP on with `"mcp": {"enabled": true}` in `dk.json`. `"disabled_tools": "submit_posts"` switches a
+  tool off.
+
 ## 6. When something is wrong: errors that teach
 
 Every failure is JSON (`application/problem+json`). A validation failure lists **every** problem at once:
@@ -385,7 +464,7 @@ Every failure is JSON (`application/problem+json`). A validation failure lists *
 Problem `code`s: `invalid`, `invalid_post_key`, `required`, `too_many`, `too_long`, `not_allowed`, `unknown_platform`, `unknown_format`,
 `unknown_option`, `unknown_field`, `unknown_account`, `account_required`, `unknown_media`, `media_expired`,
 `media_rejected` (see `expected`), `invalid_slot`, `slot_in_past`, `slot_too_far`, `duplicate_variant`, `post_key_taken`,
-`unsupported_type`, `too_large`, `empty`, `webhooks_off`, `filename_required`, `bad_url`, `fetch_failed`, `storage_full`, `quota_exceeded`.
+`unsupported_type`, `too_large`, `file_too_large` (a file over the format's `max_bytes`), `empty`, `webhooks_off`, `filename_required`, `bad_url`, `fetch_failed`, `storage_full`, `quota_exceeded`.
 
 ## 7. Repeating safely (important for agents)
 
@@ -453,7 +532,8 @@ else console.log(await (await fetch(`${API}/v1/posts`, { method: "POST", headers
 ## 9. Notes for an AI agent builder
 
 1. Give the agent **only** a `draft` key, and tell it: *a human approves in the Google Sheet's Calendar tab; never ask for approval rights*.
-2. First action every session: `GET /v1/platforms`. Never hard-code limits, they change.
+2. First action every session: `GET /v1/spec` (or `GET /v1/platforms`). Never hard-code limits, they change; keep
+   `spec_version` and send it back as `If-None-Match` to learn cheaply whether anything did.
 3. Always call **validate before create**, and apply `problems[].path` fixes. A model can fix its own mistakes from the error text alone.
 4. Put platform-specific fields in `options`. Always send `slot` with an offset. Use a stable, unique `post_key`.
 5. Never publish "now": the earliest slot is a minute ahead, and drafts need a human anyway.
@@ -464,5 +544,5 @@ else console.log(await (await fetch(`${API}/v1/posts`, { method: "POST", headers
 
 - Times: you send any offset; the Sheet and Telegram messages show Berlin time. Times are stored in UTC.
 - Posts made here need **connected accounts** (`GET /v1/platforms` lists them). Only the owner can connect accounts.
-- Not built yet: editing a post in place (cancel and resend), per-key rate limits, an MCP wrapper for agents.
+- Not built yet: editing a post in place (cancel and resend), per-key rate limits on the HTTP API (MCP has its own).
 - Questions about a failed post: ask the owner; they see it in Telegram and the Calendar tab.

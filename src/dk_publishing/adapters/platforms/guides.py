@@ -102,6 +102,7 @@ FACEBOOK = PlatformGuide(
                 facebook.MAX_ALBUM,
                 facebook.PHOTO_TYPES,
                 f"At most {facebook.MAX_PHOTO_BYTES // 1024**2} MB each.",
+                facebook.MAX_PHOTO_BYTES,
             ),
             _text("caption", facebook.MAX_CAPTION),
             (),
@@ -111,7 +112,11 @@ FACEBOOK = PlatformGuide(
             "video",
             "One video.",
             MediaGuide(
-                1, 1, facebook.VIDEO_TYPES, f"At most {facebook.MAX_VIDEO_BYTES // 1024**3} GB."
+                1,
+                1,
+                facebook.VIDEO_TYPES,
+                f"At most {facebook.MAX_VIDEO_BYTES // 1024**3} GB.",
+                facebook.MAX_VIDEO_BYTES,
             ),
             _text("caption", facebook.MAX_CAPTION),
             (DELIVERY,),
