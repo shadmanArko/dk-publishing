@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from dk_publishing.adapters.config.platforms import ConfigError, Mode, PlatformSettings
+from dk_publishing.adapters.config.review import review_settings
 from dk_publishing.adapters.notify.telegram import run_setup
 from dk_publishing.adapters.platforms.connect import connect_from_env
 from dk_publishing.adapters.platforms.dk_file import config_path, load
@@ -63,6 +64,7 @@ def check_setup(env: Mapping[str, str], platforms: Mapping[str, PlatformSettings
     _telegram(report, env, data)
     _tiktok(report, env, data, platforms)
     _media(report, data)
+    _review(report, env, data)
     return report
 
 
@@ -159,6 +161,21 @@ def _tiktok(
         report.ok("tiktok: filled in (assisted: posts go to you on Telegram; docs/setup/tiktok.md)")
     else:
         report.skip("tiktok: nothing filled in (docs/setup/tiktok.md)")
+
+
+def _review(report: SetupReport, env: Mapping[str, str], data: dict[str, Any]) -> None:
+    """The review page is optional and never a `[FAIL]` (that would page the owner nightly)."""
+    section = data.get("review") or {}
+    if not _filled(section):
+        report.skip("review page: off (no secret; `dk review init --base-url https://...`)")
+        return
+    if review_settings(env) is not None:
+        report.ok("review page: on (the secret and the public address are set)")
+        return
+    report.lines.append(
+        "[warn] review page: off, because the secret is missing or too short, or the address is "
+        "not https (`dk review init --base-url https://...`)"
+    )
 
 
 def _media(report: SetupReport, data: dict[str, Any]) -> None:

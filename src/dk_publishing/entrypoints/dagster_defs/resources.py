@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Callable
+from datetime import date
 from pathlib import Path
 
 from dagster import ConfigurableResource
@@ -80,6 +82,10 @@ class NotifyResource(ConfigurableResource):  # type: ignore[type-arg]
 
     def warnings(self) -> list[str]:
         return composition.credential_warnings(composition.environment())
+
+    def review_link(self) -> Callable[[date], str] | None:
+        """Makes the signed address of the review page for a day; None when the page is off."""
+        return composition.review_link_maker(composition.environment())
 
     def health_failures(self) -> list[str]:
         return composition.health_failures(composition.environment())

@@ -293,6 +293,7 @@ class GoogleSheetGateway:
                 ("media", e.media),
                 ("by", e.by),
                 ("note", e.note),
+                ("watch", e.watch),
             ):
                 if name in index:
                     line[index[name]] = value

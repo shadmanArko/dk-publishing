@@ -119,7 +119,9 @@ def daily_digest_op(context: OpExecutionContext, notify: NotifyResource) -> None
     if notifier is None:
         context.log.info("Telegram is not configured; no digest sent")
         return
-    sent = send_digest(notify.services(), notifier, notify.warnings())
+    sent = send_digest(
+        notify.services(), notifier, notify.warnings(), review_link=notify.review_link()
+    )
     context.log.info("digest sent" if sent else "today's digest was already sent")
 
 

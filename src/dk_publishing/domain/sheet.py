@@ -117,6 +117,7 @@ class CalendarEntry:
     media: str = ""
     by: str = ""  # the API key behind an agent's post
     note: str = ""  # why something needs a person, or why a tick was refused
+    watch: str = ""  # an agent post's link to the review page for its day (ADR 0025)
 
 
 @dataclass(frozen=True, slots=True)

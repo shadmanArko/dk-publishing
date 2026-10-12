@@ -190,6 +190,11 @@ They wait for you in the **Calendar** tab:
 
 Only `awaiting_approval` rows react to ticks. Do not edit grey cells.
 
+**Want to see the video before you approve?** On an agent's row the **`watch`** column holds a link to the **review page**
+for that day: the videos play there and you can approve or reject a whole day, an idea or one platform with a tap.
+It opens after you sign in with the link in the 08:00 Telegram message (good for 12 hours); otherwise the page tells you
+how to get a link. Human rows have no `watch` link. Details: guide 02, section 5g.
+
 ## The most common mistakes
 
 | Mistake | What you see | Fix |

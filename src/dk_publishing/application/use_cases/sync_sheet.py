@@ -21,6 +21,7 @@ from dk_publishing.application.use_cases.results import RunResult
 from dk_publishing.application.use_cases.review_drafts import MIN_LEAD, awaiting, review_drafts
 from dk_publishing.domain.model import Actor, ActorKind, Variant
 from dk_publishing.domain.publishing import VariantSnapshot, Violation
+from dk_publishing.domain.review import watch_url
 from dk_publishing.domain.sheet import (
     CalendarEntry,
     PlatformRow,
@@ -45,6 +46,7 @@ from dk_publishing.domain.sync import (
     row_status,
     source_hash,
 )
+from dk_publishing.domain.timezones import utc_to_berlin
 
 S = VariantStatus
 SHEET_ACTOR = Actor(ActorKind.HUMAN, "sheet")
@@ -470,7 +472,7 @@ def _status_plan(
             post_rows.append(PostStatus(post.row, summary, error))
 
     calendar = sorted(
-        (_calendar_entry(v, now) for v in variants if _on_calendar(v)),
+        (_calendar_entry(v, now, sync.review_base_url) for v in variants if _on_calendar(v)),
         key=lambda e: (e.slot, e.platform, e.post_key),
     )
     names: dict[str, list[str]] = {p: [] for p in sync.platforms}
@@ -484,7 +486,7 @@ def _on_calendar(v: SyncVariant) -> bool:
     return v.variant.status in CALENDAR_STATES or awaiting(v)
 
 
-def _calendar_entry(v: SyncVariant, now: datetime) -> CalendarEntry:
+def _calendar_entry(v: SyncVariant, now: datetime, review_base_url: str = "") -> CalendarEntry:
     content = v.content or {}
     status = v.variant.status.value
     note = ""
@@ -510,4 +512,9 @@ def _calendar_entry(v: SyncVariant, now: datetime) -> CalendarEntry:
         media=", ".join(str(m.get("name", "")) for m in media if isinstance(m, dict)),
         by=v.created_by or "",
         note=note,
+        watch=(
+            watch_url(review_base_url, utc_to_berlin(v.variant.publish_at).date(), v.post_key)
+            if review_base_url and v.source == "agent"
+            else ""
+        ),
     )

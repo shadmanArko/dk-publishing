@@ -423,12 +423,57 @@ The same API, for agents that speak MCP (Claude Code, Claude Desktop, Cursor, La
 | `cancel_post` | draft | `DELETE /v1/posts/{post_key}` |
 
 - Resources: `dkp://spec` (the whole contract) and `dkp://guide` (`/llms.txt`). Prompt: `publish_posts`.
-- There is **no approve tool**, whatever the key may do over HTTP. A person approves in the Calendar.
+- There is **no approve tool**, whatever the key may do over HTTP. A person approves in the Calendar or on the review
+  page (section 5g).
 - Files never travel through MCP: code uploads them with `POST /v1/media`, or a post names a public https link.
 - `dk api mcp-config --client claude-code` (or `claude-desktop`, `cursor`, `langchain`, `openai-agents`) prints the
   settings to paste. The key appears only as the variable `DK_PUBLISH_KEY`, which you set yourself.
 - The owner switches MCP on with `"mcp": {"enabled": true}` in `dk.json`. `"disabled_tools": "submit_posts"` switches a
   tool off.
+
+## 5g. The owner's daily review page: watch the videos, approve in two minutes
+
+*For the owner, in plain words. Agent builders: the last list says what the page shows of your drafts.*
+
+The Calendar tab shows text only. The **review page** shows the same drafts with the video playing, so you can
+approve a whole day at once without guessing what the video looks like. It is a normal web page you open on your phone.
+
+**How you open it**
+1. Every morning at 08:00 the Telegram message has a line **"Review today's posts"** when agent drafts for today wait
+   for you. Tap the link. (No drafts waiting, no line.)
+2. The link signs you in on that phone for 12 hours and then shows the page without the secret part in the address.
+   It works for 24 hours. After that it says so, and you use the next morning's link.
+3. Need a link at another time? On the server run `dk review link` (the runbook `docs/runbooks/review-page.md` has the
+   exact command). The Calendar tab also has a **`watch`** column: tap it on an agent's row to open that day.
+   It works if you signed in with the morning link in the last 12 hours.
+
+**What you see:** the day (use *Earlier*, *Today*, *Later* or the date box for other days), one block per **idea**, the
+video or photos once per idea, and under it each platform with its caption, format, time (Berlin), the extra settings
+(for example the YouTube title or the TikTok privacy) and which agent made it.
+
+**What you tap**
+- **Approve all N for this day** at the top: approves every post shown that is still waiting.
+- **Approve this idea / Reject this idea**: all platforms of that idea.
+- **Approve / Reject** under one platform's caption: that platform only.
+
+An approved post goes into the normal schedule, exactly as if you had ticked `approve` in the Calendar. A rejected
+post is cancelled, and the agent has to send a new one. A post whose time has already passed, or that a platform's rules
+refused, has no approve button, only reject. If something changed meanwhile (you approved it in the Sheet a minute ago),
+the page says "left alone" and changes nothing. Nothing is ever published by looking at the page.
+
+**If it says "sign-in needed" or "expired":** open the newest Telegram link, or run `dk review link`. If it says "too
+many wrong attempts", wait ten minutes. If you think a link leaked, run `dk review init --base-url <your API address>
+--rotate` on your Mac and `make deploy-secrets`: every older link stops working.
+
+**The page exists only when it is set up** (a secret and the API's address in `dk.json`; see the runbook). Without that
+it does not exist at all, the Telegram line is missing and the Calendar's `watch` column stays empty.
+
+**For agent builders**
+- Agents have no access to the page and never need approval rights; the page records the owner as the decider.
+- One `post_key` = one idea; put one variant per platform in it. The page groups by `post_key` and shows the key's name
+  (`by`), the caption, `options`, the slot and each distinct file once.
+- Files are shown from the upload for a week after the post is done (ADR 0021). A removed file shows its name instead.
+- Make `post_key`s readable (for example `2026w42-ig-tue1700-s1`): they are the headings the owner sees.
 
 ## 6. When something is wrong: errors that teach
 

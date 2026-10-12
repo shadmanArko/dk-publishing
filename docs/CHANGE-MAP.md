@@ -97,6 +97,17 @@ Everything in the row above, plus:
 - ADR 0022; guide 01 ("Approve", "Posts that come from software"), guide 02 (keys and rights)
 - Decision on record: own posts are approved with `ready`; agent posts in the Calendar. Do not merge them without asking
 
+### The owner's review page, its link or the Calendar's `watch` column (ADR 0025)
+- Tokens, expiry and form tokens: `src/dk_publishing/domain/review.py`; whether the page is on: `src/dk_publishing/adapters/config/review.py`
+- What the page lists and decides: `src/dk_publishing/application/use_cases/daily_review.py` (decisions end in `review_drafts.py`: never a second path)
+- The routes and their checks: `src/dk_publishing/entrypoints/publish_api/review.py`; the HTML: `src/dk_publishing/entrypoints/publish_api/review_pages.py`
+- Media previews: `src/dk_publishing/adapters/media/preview.py` (reuses the public links of `src/dk_publishing/adapters/media/public.py`)
+- The digest's line: `src/dk_publishing/application/use_cases/alerts.py`; the Calendar column: `config/sheet.yaml` (`watch`), `src/dk_publishing/application/use_cases/sync_sheet.py`
+- Settings: `review` in `src/dk_publishing/adapters/platforms/dk_file.py`, `dk review init|link` in `src/dk_publishing/entrypoints/cli.py`, a warning line in `src/dk_publishing/adapters/platforms/setup_check.py`
+- Guide 02 section 5g, guide 01 (the `watch` column), the owner's steps in `docs/runbooks/review-page.md`, then `make guides`; ADR 0025
+- Tests: `tests/unit/test_review_links.py`, `tests/unit/test_review_preview.py`, `tests/integration/test_review_page.py`
+- After merging: `dk review init` and `make deploy-secrets` (the page stays off until then), then `make sheet-init` for the new column
+
 ### Webhook events, payload or retries
 - `src/dk_publishing/domain/webhooks.py` (event types, signature), `src/dk_publishing/application/use_cases/webhooks.py` (payload, retry gaps)
 - `src/dk_publishing/adapters/notify/webhooks.py` (sending, address checks), `src/dk_publishing/adapters/persistence/webhooks.py`

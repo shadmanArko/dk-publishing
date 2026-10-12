@@ -144,6 +144,11 @@ GET /v1/platforms) a post is handed to a person on Telegram to publish by hand: 
 
 ## Approving and cancelling
 
+A person approves your drafts, on the owner's review page (the videos play there) or in the Google Sheet's
+Calendar tab. You cannot reach that page and must never ask for approval rights. The page groups a day's drafts by
+post_key (one idea, up to one variant per platform) and shows the key name, caption, options, slot and every file,
+so use one post_key per idea and give files and captions a person can judge at a glance.
+
 POST   /v1/posts/{post_key}/approve   (needs the approve right) approve every draft of the post
 DELETE /v1/posts/{post_key}           cancel everything that has not gone out; published
                                       or in-flight variants are left and reported as a conflict

@@ -8,6 +8,7 @@ from dk_publishing.application.ports import (
     MediaCatalog,
     MediaDisk,
     MediaIntake,
+    MediaPreview,
     MediaStore,
     Notifier,
     PublisherRegistry,
@@ -39,6 +40,7 @@ class SyncServices:
     platforms: Sequence[str]  # every platform key, so empty account lists get cleared too
     tenant_id: str = "dk"
     max_cancellations: int = 5  # more scheduled cancellations than this in one sync is a slip
+    review_base_url: str = ""  # the review page's public address; "" = no `watch` links (ADR 0025)
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,3 +62,15 @@ class ApiServices:
     )  # route and quotas per platform
     max_upload_bytes: int = 0  # largest file the API takes; 0 = not stated
     upload_types: tuple[str, ...] = ()  # file extensions the API takes
+
+
+@dataclass(frozen=True, slots=True)
+class ReviewServices:
+    """What the owner's daily review page needs. It is only ever built when a review secret and a
+    public address are configured; without them the page does not exist."""
+
+    core: Services
+    secret: str  # signs links, sessions and form tokens; never logged
+    base_url: str  # the public address the links point at
+    tenant_id: str = "dk"
+    preview: MediaPreview | None = None  # None: media is named but not shown

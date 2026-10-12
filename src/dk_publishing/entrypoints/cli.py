@@ -129,6 +129,25 @@ def _run(argv: Sequence[str] | None = None) -> int:
     serve = api_commands.add_parser("serve", help="run the API server")
     serve.add_argument("--host", default="127.0.0.1")
     serve.add_argument("--port", type=int, default=8000)
+    review = commands.add_parser("review", help="the owner's daily review page (ADR 0025)")
+    review_commands = review.add_subparsers(dest="review_command", required=True)
+    review_link = review_commands.add_parser(
+        "link", help="print a fresh sign-in link for the review page (valid 24 hours)"
+    )
+    review_link.add_argument(
+        "--day", help="open this day (YYYY-MM-DD); default: today, Berlin time"
+    )
+    review_init = review_commands.add_parser(
+        "init", help="make the review secret in dk.json (never shown) and set the page's address"
+    )
+    review_init.add_argument(
+        "--base-url",
+        required=True,
+        help="the API's public address, e.g. https://publish.example.com",
+    )
+    review_init.add_argument(
+        "--rotate", action="store_true", help="replace an existing secret (old links stop working)"
+    )
     media = commands.add_parser("media", help="the media disk: clean up files nothing needs")
     media_commands = media.add_subparsers(dest="media_command", required=True)
     purge = media_commands.add_parser(
@@ -165,6 +184,8 @@ def _run(argv: Sequence[str] | None = None) -> int:
         return _telegram(args.telegram_command)
     if args.command == "meta":
         return _meta(args.meta_command, force=getattr(args, "force", False))
+    if args.command == "review":
+        return _review(args)  # needs no database: it only signs and prints
     if args.command == "api" and args.api_command == "mcp-config":
         return _api(args, "")  # prints settings only: needs no database
 
@@ -530,6 +551,44 @@ def _api(args: argparse.Namespace, database_url: str) -> int:
             print(f"  {problem.path}: {problem.message}", file=sys.stderr)
         return 1
     print(f"{post.post_key}: {post.summary}")
+    return 0
+
+
+def _review(args: argparse.Namespace) -> int:
+    from datetime import date
+
+    from dk_publishing.adapters.clock import SystemClock
+    from dk_publishing.domain.timezones import utc_to_berlin
+
+    if args.review_command == "init":
+        # The raw environment, like `init`: dk.json is what gets written.
+        path, made = composition.init_review(
+            composition.environment(), args.base_url, rotate=args.rotate
+        )
+        verb = "made a new secret" if made else "kept the existing secret"
+        print(f"[did] {verb} and saved the review page address in {path} (the secret is not shown)")
+        print("Next: make deploy-secrets   (sends it to the server), then `dk review link` there.")
+        return 0
+    make = composition.review_link_maker(_env())
+    if make is None:
+        print(
+            "[FAIL] The review page is off: dk.json has no usable review.secret and "
+            "review.public_base_url. Run `dk review init --base-url https://...` on your Mac "
+            "and `make deploy-secrets`.",
+            file=sys.stderr,
+        )
+        return 1
+    try:
+        day = (
+            date.fromisoformat(args.day) if args.day else utc_to_berlin(SystemClock().now()).date()
+        )
+    except ValueError:
+        print("[FAIL] --day must look like 2026-10-14", file=sys.stderr)
+        return 2
+    print(make(day))
+    print(
+        "Valid for 24 hours. Opening it signs you in on that device for 12 hours.", file=sys.stderr
+    )
     return 0
 
 
