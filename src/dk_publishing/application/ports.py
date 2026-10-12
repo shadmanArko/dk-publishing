@@ -75,6 +75,12 @@ class MediaStore(Protocol):
         it had when approved. Safe to repeat; a file already downloaded is reused."""
 
 
+class MediaPreview(Protocol):
+    def url_for(self, item: Mapping[str, Any]) -> str | None:
+        """A temporary link the owner's browser can show for one media item of a post (the same
+        tokenised links platforms fetch from), or None when there is no way to show it."""
+
+
 class DuplicateAccount(Exception):
     """An account with this display name (or external id) already exists on the platform."""
 

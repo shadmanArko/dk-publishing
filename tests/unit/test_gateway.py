@@ -293,6 +293,24 @@ def test_the_calendar_is_rewritten_only_when_it_differs() -> None:
     )
 
 
+def test_the_watch_link_is_written_to_its_column_and_an_old_calendar_simply_lacks_it() -> None:
+    link = "https://publish.example.test/review?day=2026-11-14#i-DK-1"
+    entry = CalendarEntry(
+        NOW, "instagram", "Main", "DK-1", "", "awaiting_approval", "agent", watch=link
+    )
+    gw, fake = gateway(blank())
+    gw.read()
+    gw.write(StatusPlan(calendar=[entry]))
+    assert calendar_row(fake)[TABS["Calendar"].index("watch")] == link
+
+    old = blank()
+    old["Calendar"] = [[n for n in TABS["Calendar"] if n != "watch"]]  # a Sheet from before
+    gw_old, fake_old = gateway(old)
+    gw_old.read()
+    gw_old.write(StatusPlan(calendar=[entry]))  # no error, and no cell for the missing column
+    assert all(link not in str(u["values"]) for u in fake_old.updates)
+
+
 def test_account_lists_are_written_per_platform_and_only_when_changed() -> None:
     gw, fake = gateway(blank())
     gw.read()

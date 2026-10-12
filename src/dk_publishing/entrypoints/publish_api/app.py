@@ -26,7 +26,7 @@ from dk_publishing.application.ports import (
     WebhookDelivery,
     WebhookEndpoint,
 )
-from dk_publishing.application.services import ApiServices
+from dk_publishing.application.services import ApiServices, ReviewServices
 from dk_publishing.application.use_cases import api_keys
 from dk_publishing.application.use_cases import webhooks as hooks
 from dk_publishing.application.use_cases.api_batch import MAX_BATCH, BatchItem, submit_batch
@@ -50,6 +50,7 @@ from dk_publishing.application.use_cases.media_retention import upload_allowance
 from dk_publishing.application.use_cases.publishing_spec import build_spec, spec_slice
 from dk_publishing.application.use_cases.publishing_status import calendar, overview
 from dk_publishing.domain.guide import FieldGuide, FormatGuide, PlatformGuide
+from dk_publishing.entrypoints.publish_api.review import review_router
 
 PROBLEM = "application/problem+json"
 STATUS = {
@@ -322,8 +323,12 @@ def problem_response(
 # --- the app ----------------------------------------------------------------------------------
 
 
-def create_app(api: ApiServices, mcp_app: Any = None) -> FastAPI:
-    """`mcp_app`: the MCP endpoint's ASGI app (with its lifespan), served at /mcp/ when given."""
+def create_app(
+    api: ApiServices, mcp_app: Any = None, review: ReviewServices | None = None
+) -> FastAPI:
+    """`mcp_app`: the MCP endpoint's ASGI app (with its lifespan), served at /mcp/ when given.
+    `review`: the owner's daily review page at /review (ADR 0025); without it there is no such
+    page and /review answers like any unknown address."""
     app = FastAPI(
         lifespan=mcp_app.lifespan if mcp_app is not None else None,
         title="DK Publishing API",
@@ -398,6 +403,8 @@ def create_app(api: ApiServices, mcp_app: Any = None) -> FastAPI:
 
     if mcp_app is not None:
         app.mount("/mcp", mcp_app)
+    if review is not None:
+        app.include_router(review_router(review))
 
     @app.get("/healthz", include_in_schema=False)
     def healthz() -> dict[str, str]:

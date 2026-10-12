@@ -1,4 +1,5 @@
-"""A person approves or rejects, in the Sheet's Calendar tab, posts an agent submitted (ADR 0022).
+"""A person approves or rejects posts an agent submitted: in the Sheet's Calendar tab (ADR 0022) or
+on the daily review page (ADR 0025). Both come through here, so there is one approval path.
 
 Only variants made through the API that are still waiting (draft, or invalid after a refused
 approval) react to a tick; a tick on anything else is stale and is ignored. Approving goes through
@@ -23,6 +24,7 @@ from dk_publishing.domain.sync import cancel_path
 
 S = VariantStatus
 SHEET_ACTOR = Actor(ActorKind.HUMAN, "sheet")
+PAGE_ACTOR = Actor(ActorKind.HUMAN, "review-page")
 WAITING = frozenset({S.DRAFT, S.PENDING_APPROVAL, S.INVALID})
 MIN_LEAD = timedelta(minutes=1)  # the same rule as approving through the API
 
@@ -43,7 +45,12 @@ def review_drafts(
     tenant_id: str,
     decisions: Sequence[CalendarDecision],
     variants: Sequence[SyncVariant],
+    *,
+    actor: Actor = SHEET_ACTOR,
+    where: str = "the Sheet",
 ) -> ReviewReport:
+    """Apply each decision to the matching agent post that is still waiting. `actor` and `where`
+    only say who decided and where, in the post's history; the rules are the same everywhere."""
     report = ReviewReport()
     found = {(v.post_key, v.variant.platform, v.account_name or ""): v for v in variants}
     for d in decisions:
@@ -54,20 +61,22 @@ def review_drafts(
         if d.approve and d.reject:
             report.problems.append(f"{label}: tick approve or reject, not both. Nothing done.")
         elif d.reject:
-            _reject(services, sv, report, label)
+            _reject(services, sv, report, label, actor, where)
         else:
-            _approve(services, sv, report, label)
+            _approve(services, sv, report, label, actor)
     return report
 
 
-def _reject(services: Services, sv: SyncVariant, report: ReviewReport, label: str) -> None:
+def _reject(
+    services: Services, sv: SyncVariant, report: ReviewReport, label: str, actor: Actor, where: str
+) -> None:
     now = services.clock.now()
     with services.uow() as uow:
         moved = sv.variant
         for target in cancel_path(sv.variant.status):
             step = move(
-                uow, moved, target, reason="rejected in the Sheet", at=now, next_step=None,
-                actor=SHEET_ACTOR,
+                uow, moved, target, reason=f"rejected in {where}", at=now, next_step=None,
+                actor=actor,
             )  # fmt: skip
             if step is None:
                 report.problems.append(f"{label}: could not reject, it changed meanwhile.")
@@ -77,23 +86,23 @@ def _reject(services: Services, sv: SyncVariant, report: ReviewReport, label: st
     report.rejected += 1
 
 
-def _approve(services: Services, sv: SyncVariant, report: ReviewReport, label: str) -> None:
+def _approve(
+    services: Services, sv: SyncVariant, report: ReviewReport, label: str, actor: Actor
+) -> None:
     if sv.variant.status is S.INVALID:
         report.problems.append(
             f"{label}: this post was refused by the platform's rules and cannot be approved. "
-            "Tick reject; the agent must submit a corrected post."
+            "Reject it; the agent must submit a corrected post."
         )
         return
     if sv.variant.publish_at < services.clock.now() + MIN_LEAD:
-        report.problems.append(
-            f"{label}: its slot has passed. Tick reject; the agent must resubmit."
-        )
+        report.problems.append(f"{label}: its slot has passed. Reject it; the agent must resubmit.")
         return
     content = sv.content
     if content is None:
-        report.problems.append(f"{label}: the submitted content is missing; tick reject.")
+        report.problems.append(f"{label}: the submitted content is missing; reject it.")
         return
-    outcome, violations = approve(services, sv.variant.id, content, SHEET_ACTOR)
+    outcome, violations = approve(services, sv.variant.id, content, actor)
     if outcome is RunResult.APPROVED:
         report.approved += 1
     elif outcome is RunResult.INVALID:

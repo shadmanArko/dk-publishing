@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import os
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import replace
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -13,11 +13,13 @@ import httpx
 
 from dk_publishing.adapters.clock import SystemClock
 from dk_publishing.adapters.config.platforms import ConfigError, Mode, load_platforms
-from dk_publishing.adapters.config.secrets_file import split_ref
+from dk_publishing.adapters.config.review import review_settings
+from dk_publishing.adapters.config.secrets_file import SecretsFile, split_ref
 from dk_publishing.adapters.config.sheet_layout import load_sheet_layout
 from dk_publishing.adapters.media.drive_catalog import DriveCatalog, sheet_modified_time
 from dk_publishing.adapters.media.drive_store import DriveMediaStore, GoogleDriveDownloader
 from dk_publishing.adapters.media.janitor import MediaDiskJanitor
+from dk_publishing.adapters.media.preview import PublicLinkPreview
 from dk_publishing.adapters.media.public import PublicMediaStore
 from dk_publishing.adapters.media.uploads import ALLOWED as UPLOAD_TYPES
 from dk_publishing.adapters.media.uploads import (
@@ -91,7 +93,12 @@ from dk_publishing.application.ports import (
     UnitOfWork,
     WebhookEndpoint,
 )
-from dk_publishing.application.services import ApiServices, Services, SyncServices
+from dk_publishing.application.services import (
+    ApiServices,
+    ReviewServices,
+    Services,
+    SyncServices,
+)
 from dk_publishing.application.use_cases.api_posts import PostView
 from dk_publishing.application.use_cases.approve import approve
 from dk_publishing.application.use_cases.media_retention import (
@@ -106,6 +113,7 @@ from dk_publishing.application.use_cases.webhooks import (
     deliver_due,
 )
 from dk_publishing.application.use_cases.webhooks import has_work as webhooks_have_work_in
+from dk_publishing.domain import review as review_links
 from dk_publishing.domain.model import Actor, ActorKind
 from dk_publishing.domain.timezones import local_to_serial
 
@@ -278,12 +286,14 @@ def build_sync_services(
     platforms = load_platforms(DEFAULT_PLATFORMS_CONFIG)
     layout = load_sheet_layout(DEFAULT_SHEET_CONFIG, set(platforms))
     sheets, drive, _, _ = connect(credentials_path)
+    review = review_settings(env or {})
     return SyncServices(
         core=build_services(database_url, env=env),
         sheet=GoogleSheetGateway(sheets, sheet_id=sheet_id, layout=layout, platforms=platforms),
         media=DriveCatalog(drive, folder_id),
         platforms=list(platforms),
         tenant_id=tenant_id,
+        review_base_url=review[1] if review else "",
     )
 
 
@@ -609,6 +619,63 @@ def publishing_spec(
 
 
 DEFAULT_KEY_QUOTA_MB = 5120
+
+
+def build_review_services(
+    api: ApiServices, env: Mapping[str, str], transport: httpx.BaseTransport | None = None
+) -> ReviewServices | None:
+    """The review page's services, or None (the page does not exist) without a usable secret and
+    public address. Media previews use the tokenised public links when the server has them."""
+    found = review_settings(env)
+    if found is None:
+        return None
+    secret, base = found
+    public = public_media(env)
+    preview = (
+        PublicLinkPreview(UploadStore(media_folder(env)), public, api.core.clock.now)
+        if public is not None
+        else None
+    )
+    return ReviewServices(
+        core=api.core, secret=secret, base_url=base, tenant_id=api.tenant_id, preview=preview
+    )
+
+
+def review_link_maker(env: Mapping[str, str]) -> Callable[[date], str] | None:
+    """Makes a fresh signed sign-in link for a day's review page; None when the page is off."""
+    found = review_settings(env)
+    if found is None:
+        return None
+    secret, base = found
+    clock = SystemClock()
+
+    def make(day: date) -> str:
+        token = review_links.issue(secret, review_links.LINK, clock.now(), review_links.LINK_TTL)
+        return review_links.link_url(base, token, day)
+
+    return make
+
+
+def init_review(
+    env: Mapping[str, str], base_url: str, *, rotate: bool = False
+) -> tuple[Path, bool]:
+    """Write a fresh review secret (and the public address) into dk.json, never printing it.
+    Returns (the file, whether a new secret was made). An existing secret is kept unless `rotate`:
+    replacing it ends every sign-in link and session already handed out."""
+    path = config_path(env)
+    if path is None:
+        raise ConfigError("DK_CONFIG_FILE is not set; run `make init` and follow what it prints")
+    base = review_links.clean_base(base_url)
+    if not base.startswith("https://") or "/" in base[len("https://") :]:
+        raise ConfigError("--base-url must look like https://publish.example.com (no path)")
+    file = SecretsFile(path)
+    section = dict(file.read().get("review") or {})
+    made = rotate or not str(section.get("secret") or "").strip()
+    if made:
+        section["secret"] = review_links.new_secret()
+    section["public_base_url"] = base
+    file.update({"review": section})
+    return path, made
 
 
 def _whole(env: Mapping[str, str], name: str, default: int) -> int:

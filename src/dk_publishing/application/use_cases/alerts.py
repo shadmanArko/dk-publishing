@@ -7,13 +7,14 @@ repeat.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from html import escape
 
 from dk_publishing.application.ports import AlertEvent, DigestItem, Notifier, NotifyError
 from dk_publishing.application.services import Services
+from dk_publishing.application.use_cases.daily_review import waiting_on
 from dk_publishing.domain.timezones import BERLIN, utc_to_berlin
 
 LOOKBACK = timedelta(hours=24)  # a first start never floods with old history
@@ -106,6 +107,7 @@ def digest_text(
     yesterday: Sequence[DigestItem],
     today: Sequence[DigestItem],
     warnings: Sequence[str],
+    review: tuple[int, str] | None = None,
 ) -> str:
     published = [i for i in yesterday if i.status == "published"]
     problems = [i for i in yesterday if i.status != "published"]
@@ -124,6 +126,13 @@ def digest_text(
         lines.append(f"✅ {escape(item.platform)} · {escape(item.title)} ({late}s after the slot)")
     for item in problems:
         lines.append(f"❌ {escape(item.platform)} · {escape(item.title)}: {escape(item.status)}")
+    if review is not None:
+        count, link = review
+        lines.append("")
+        lines.append(
+            f"📝 <b>{count} post{'s' if count != 1 else ''} from your agents wait for your OK</b>\n"
+            f'Review today\'s posts: <a href="{escape(link, quote=True)}">open the review page</a>'
+        )
     if warnings:
         lines.append("")
         lines.append("<b>Needs you</b>")
@@ -136,8 +145,12 @@ def send_digest(
     notifier: Notifier,
     warnings: Sequence[str] = (),
     tenant_id: str = "dk",
+    review_link: Callable[[date], str] | None = None,
 ) -> bool:
-    """Today's slots, yesterday's results and anything waiting on a person. Once per Berlin day."""
+    """Today's slots, yesterday's results and anything waiting on a person. Once per Berlin day.
+
+    `review_link` makes the signed address of the review page for a day (ADR 0025); the digest
+    carries it only when agent posts for today wait for approval, and never without it."""
     now = services.clock.now()
     local = utc_to_berlin(now)
     key = f"digest:{local:%Y-%m-%d}"
@@ -148,7 +161,12 @@ def send_digest(
             return False
         yesterday = uow.alerts.results(tenant_id, start_yesterday, start_today)
         today = uow.alerts.upcoming(tenant_id, start_today, start_today + timedelta(days=1))
-    notifier.send(digest_text(yesterday=yesterday, today=today, warnings=warnings))
+    review: tuple[int, str] | None = None
+    if review_link is not None:
+        waiting = waiting_on(services, tenant_id, local.date())
+        if waiting:
+            review = (waiting, review_link(local.date()))
+    notifier.send(digest_text(yesterday=yesterday, today=today, warnings=warnings, review=review))
     with services.uow() as uow:
         uow.alerts.mark_sent(tenant_id, key, services.clock.now())
         uow.commit()

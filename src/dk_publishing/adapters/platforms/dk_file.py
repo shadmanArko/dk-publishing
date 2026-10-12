@@ -54,6 +54,14 @@ TEMPLATE: dict[str, Any] = {
         "enabled": False,
         "disabled_tools": "",
     },
+    "review": {
+        "_help": (
+            "The daily review page (ADR 0025). `dk review init` fills this in: secret signs the "
+            "links, public_base_url is the API's public address, e.g. https://publish.example.com"
+        ),
+        "secret": "",
+        "public_base_url": "",
+    },
     "telegram": {
         "_help": "Alerts and the morning digest. docs/setup/telegram.md",
         "bot_token": "",
@@ -94,6 +102,8 @@ _VALUES = {
     ("media", "public_base_url"): "PUBLIC_MEDIA_BASE_URL",
     ("media", "public_dir"): "PUBLIC_MEDIA_DIR",
     ("media", "work_dir"): "MEDIA_DIR",
+    ("review", "secret"): "REVIEW_SECRET",  # signs review links; empty = no review page
+    ("review", "public_base_url"): "REVIEW_BASE_URL",  # where those links point
     ("mcp", "enabled"): "MCP_ENABLED",  # true: serve the MCP endpoint at /mcp/ (ADR 0024)
     ("mcp", "disabled_tools"): "MCP_DISABLED_TOOLS",  # comma-separated tool names to switch off
 }
