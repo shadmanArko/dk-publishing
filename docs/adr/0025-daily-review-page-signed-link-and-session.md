@@ -62,7 +62,7 @@ video is not a review.
   single-use link would be burned by the preview. Run `dk review init --rotate` to invalidate everything at once.
 - **Cross-site request forgery:** `SameSite=Lax` cookie, per-session form token, `Origin` check.
 - **A draft's text attacks the page:** every value from a draft is escaped; the response carries a content security
-  policy with no script allowed at all, `no-store`, `no-referrer` and `DENY` framing headers.
+  policy with no script allowed at all, `no-store`, `same-origin` referrer policy and `DENY` framing headers. (Amended 2026-10-13: this said `no-referrer`, which makes Chrome send `Origin: null` on the page's own form posts, so every Approve and Reject was refused. `same-origin` sends nothing to other sites and keeps the check.)
 - **Secrets in logs:** the token travels in the query string of one address; the access log filter cuts it off, and
   no code path logs a token, a cookie or the secret. A reverse proxy in front may log query strings: the link is only
   a login and ends in 24 hours.

@@ -26,7 +26,10 @@ MAX_FORM_BYTES = 64 * 1024
 MAX_DAYS_AWAY = 120  # the picker is for the next days, not for archaeology
 HEADERS = {
     "Cache-Control": "no-store",
-    "Referrer-Policy": "no-referrer",
+    # same-origin, not no-referrer: with no-referrer Chrome sends "Origin: null" on this page's
+    # own form posts and the same-site check rightly refuses "null" (found live 2026-10-13: every
+    # Approve and Reject was refused). A cross-site request carries no referrer either way.
+    "Referrer-Policy": "same-origin",
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "DENY",
     "Content-Security-Policy": pages.CSP,

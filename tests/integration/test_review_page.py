@@ -183,7 +183,8 @@ def test_a_signed_link_trades_for_a_locked_cookie_and_a_clean_address(review: Re
     assert token not in answer.headers["set-cookie"]  # the cookie is a different, session token
     assert (
         answer.headers["cache-control"] == "no-store"
-        and answer.headers["referrer-policy"] == "no-referrer"
+        and answer.headers["referrer-policy"]
+        == "same-origin"  # not no-referrer: Chrome would send Origin: null
     )
     assert review.page().status_code == 200
 
