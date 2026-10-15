@@ -276,3 +276,16 @@ def test_check_setup_reports_the_page_without_ever_failing_on_it(dk: Path) -> No
     cli.main(["review", "init", "--base-url", "https://publish.example.test", "--rotate"])
     env = composition.environment()
     assert lines(env)[0].startswith("[ok]")
+
+
+def test_a_token_can_carry_who_signed_in_and_old_tokens_carry_nobody() -> None:
+    now = datetime(2026, 11, 14, 12, tzinfo=UTC)
+    mine = r.issue(SECRET, r.SESSION, now, r.SIGNED_IN_TTL, "owner@example.test")
+    verdict, claims = r.check(SECRET, mine, r.SESSION, now)
+    assert verdict is r.Verdict.OK and claims is not None and claims.who == "owner@example.test"
+    assert r.check(SECRET, mine, r.SESSION, now + timedelta(days=364))[0] is r.Verdict.OK
+    assert r.check(SECRET, mine, r.SESSION, now + timedelta(days=366))[0] is r.Verdict.EXPIRED
+    plain = r.issue(SECRET, r.SESSION, now, r.SESSION_TTL)
+    _, claims = r.check(SECRET, plain, r.SESSION, now)
+    assert claims is not None and claims.who == ""
+    assert r.check(SECRET, mine, r.LINK, now)[0] is r.Verdict.INVALID  # purpose still binds

@@ -498,6 +498,19 @@ class DigestItem:
     reason: str | None
 
 
+class LoginUnavailable(Exception):
+    """The sign-in service could not be asked (down, slow, or answered something unexpected)."""
+
+
+class AdminLogin(Protocol):
+    """Checks an email and password against the admin panel's own login (ADR 0026). This service
+    never stores, logs or forwards a password anywhere else."""
+
+    def verify(self, email: str, password: str) -> str | None:
+        """The admin's email when the pair is right, None when it is wrong.
+        Raises LoginUnavailable when no answer could be had (never treat that as a yes)."""
+
+
 class NotifyError(Exception):
     """The message could not be delivered. Nothing is marked as sent, so it is tried again."""
 

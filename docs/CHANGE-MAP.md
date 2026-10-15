@@ -105,7 +105,8 @@ Everything in the row above, plus:
 - The digest's line: `src/dk_publishing/application/use_cases/alerts.py`; the Calendar column: `config/sheet.yaml` (`watch`), `src/dk_publishing/application/use_cases/sync_sheet.py`
 - Settings: `review` in `src/dk_publishing/adapters/platforms/dk_file.py`, `dk review init|link` in `src/dk_publishing/entrypoints/cli.py`, a warning line in `src/dk_publishing/adapters/platforms/setup_check.py`
 - Guide 02 section 5g, guide 01 (the `watch` column), the owner's steps in `docs/runbooks/review-page.md`, then `make guides`; ADR 0025
-- Tests: `tests/unit/test_review_links.py`, `tests/unit/test_review_preview.py`, `tests/integration/test_review_page.py`
+- Sign in with the admin login (ADR 0026): `src/dk_publishing/adapters/auth/admin_login.py`, `admin_login_settings` in `src/dk_publishing/adapters/config/review.py`, the login/logout routes in `review.py`, `dk review init --admin-login-url/--allow-email`, `review.admin_login_url|allowed_emails` in `dk_file.py`
+- Tests: `tests/unit/test_review_links.py`, `tests/unit/test_review_preview.py`, `tests/unit/test_admin_login.py`, `tests/integration/test_review_page.py`, `tests/integration/test_review_login.py`
 - After merging: `dk review init` and `make deploy-secrets` (the page stays off until then), then `make sheet-init` for the new column
 
 ### Webhook events, payload or retries
