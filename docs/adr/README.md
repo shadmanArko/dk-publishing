@@ -30,3 +30,4 @@ Each file records one decision so a later change argues against the original rea
 | 23 | [Webhooks tell API clients when their posts change state](0023-webhooks-for-api-clients.md) |
 | 24 | [One publishing contract, status for every post, batches, and an MCP endpoint](0024-publishing-contract-status-batch-and-mcp.md) |
 | 25 | [A daily review page for the owner, opened from a signed link](0025-daily-review-page-signed-link-and-session.md) |
+| 26 | [Sign in to the review page with the admin panel's email and password](0026-review-page-sign-in-with-the-admin-login.md) |

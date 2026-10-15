@@ -148,6 +148,17 @@ def _run(argv: Sequence[str] | None = None) -> int:
     review_init.add_argument(
         "--rotate", action="store_true", help="replace an existing secret (old links stop working)"
     )
+    review_init.add_argument(
+        "--admin-login-url",
+        default="",
+        help="sign in with the admin panel login: its address, e.g. https://api.example.com/v1/admin/login",
+    )
+    review_init.add_argument(
+        "--allow-email",
+        action="append",
+        default=[],
+        help="an admin email allowed to sign in that way (repeat for more people)",
+    )
     media = commands.add_parser("media", help="the media disk: clean up files nothing needs")
     media_commands = media.add_subparsers(dest="media_command", required=True)
     purge = media_commands.add_parser(
@@ -563,7 +574,11 @@ def _review(args: argparse.Namespace) -> int:
     if args.review_command == "init":
         # The raw environment, like `init`: dk.json is what gets written.
         path, made = composition.init_review(
-            composition.environment(), args.base_url, rotate=args.rotate
+            composition.environment(),
+            args.base_url,
+            rotate=args.rotate,
+            admin_login_url=args.admin_login_url,
+            allow_emails=args.allow_email,
         )
         verb = "made a new secret" if made else "kept the existing secret"
         print(f"[did] {verb} and saved the review page address in {path} (the secret is not shown)")

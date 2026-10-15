@@ -88,3 +88,21 @@ Another day: `dk review link --day 2026-10-20`.
 
 Switch the page off again: empty `review.secret` in `dk.json` (or remove the section), `make deploy-secrets`, restart
 `api`. The digest line and the `watch` links stop with it.
+
+
+## 5. Optional: sign in with your admin email and password (ADR 0026)
+
+Lets you (and anyone you name) open the page from any device with the same email and password as the admin panel, and
+stay signed in for a year. The link in steps 3 and 4 keeps working. On your **Mac**:
+
+```bash
+cd "/Users/shadman.arko/Documents/Work_DoNotTouch/Dhaka Kacchi/dk-publishing"
+uv run --env-file .env dk review init --base-url https://YOUR-PUBLISH-ADDRESS \
+  --admin-login-url https://YOUR-API-ADDRESS/v1/admin/login --allow-email you@example.com
+make check-setup
+make deploy-secrets
+```
+
+Repeat `--allow-email` for each person. Then open `https://YOUR-PUBLISH-ADDRESS/review/login` and sign in. Wrong
+password, or an email that is not on the list, gives the same message on purpose. To remove someone, run the first
+command again with only the emails that should stay (it replaces the list), then `make deploy-secrets`.

@@ -28,6 +28,9 @@ LINK = "review-link"  # what the digest carries
 SESSION = "review-session"  # what the cookie carries
 LINK_TTL = timedelta(hours=24)
 SESSION_TTL = timedelta(hours=12)
+SIGNED_IN_TTL = timedelta(
+    days=365
+)  # email + password sign-in (ADR 0026): a year, renewed on every visit
 MIN_SECRET_LENGTH = 32  # `dk review init` makes 43; a hand-typed short one is refused
 MAX_TOKEN_LENGTH = 512
 
@@ -45,6 +48,7 @@ class Claims:
     purpose: str
     expires: datetime
     ident: str  # random per token; the session's id, which its CSRF token is derived from
+    who: str = ""  # the signed-in person's email (ADR 0026); empty for a link or a link's session
 
 
 def secret_is_usable(secret: str) -> bool:
@@ -72,13 +76,17 @@ def _mac(secret: str, payload: str) -> bytes:
     return hmac.new(_key(secret), payload.encode("ascii"), hashlib.sha256).digest()
 
 
-def issue(secret: str, purpose: str, now: datetime, ttl: timedelta) -> str:
-    """A signed token for `purpose`, valid from `now` for `ttl`."""
+def issue(
+    secret: str, purpose: str, now: datetime, ttl: timedelta, who: str = "", ident: str = ""
+) -> str:
+    """A signed token for `purpose`, valid from `now` for `ttl`; `who` names who signed in."""
     claims = {
         "p": purpose,
         "e": int((now + ttl).astimezone(UTC).timestamp()),
-        "i": secrets.token_hex(8),
+        "i": ident or secrets.token_hex(8),  # a renewal keeps its id, so open forms stay valid
     }
+    if who:
+        claims["u"] = who
     payload = _b64(json.dumps(claims, separators=(",", ":")).encode())
     return f"{payload}.{_b64(_mac(secret, payload))}"
 
@@ -96,13 +104,19 @@ def check(secret: str, token: str, purpose: str, now: datetime) -> tuple[Verdict
             return Verdict.INVALID, None
         body = json.loads(_unb64(payload))
         kind, ends, ident = body["p"], body["e"], body["i"]
+        who = body.get("u", "")
     except (ValueError, KeyError, TypeError, binascii.Error, UnicodeError):
         return Verdict.INVALID, None
-    if not (isinstance(kind, str) and isinstance(ends, int) and isinstance(ident, str)):
+    if not (
+        isinstance(kind, str)
+        and isinstance(ends, int)
+        and isinstance(ident, str)
+        and isinstance(who, str)
+    ):
         return Verdict.INVALID, None
     if not hmac.compare_digest(kind.encode(), purpose.encode()):
         return Verdict.INVALID, None
-    claims = Claims(kind, datetime.fromtimestamp(ends, UTC), ident)
+    claims = Claims(kind, datetime.fromtimestamp(ends, UTC), ident, who)
     if claims.expires <= now:
         return Verdict.EXPIRED, None
     return Verdict.OK, claims

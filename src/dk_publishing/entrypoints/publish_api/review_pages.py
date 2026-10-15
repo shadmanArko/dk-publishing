@@ -106,16 +106,48 @@ _GET_A_LINK = (
 )
 
 
-def signed_out(reason: str) -> str:
-    """`reason`: 'none' (no session), 'expired' (a link or session that ran out), 'invalid'."""
+def signed_out(reason: str, login: bool = False) -> str:
+    """`reason`: 'none' (no session), 'expired' (a link or session that ran out), 'invalid'.
+    `login`: email and password sign-in is on, so offer it first (ADR 0026)."""
     said = {
         "expired": "That link or sign-in has expired.",
         "invalid": "That link is not valid.",
     }.get(reason, "You are not signed in.")
+    how = (
+        '<p><a href="/review/login">Sign in with your admin email and password</a></p>'
+        "<p>Or use the newest link in your morning Telegram message.</p>"
+        if login
+        else "<p>This page is only for the owner and opens only from a signed link. "
+        f"{_GET_A_LINK}</p>"
+    )
+    return shell("Review: sign-in needed", f'<main class="plain"><h1>{said}</h1>{how}</main>')
+
+
+def login_page(error: str = "") -> str:
+    """The email and password form. One generic error for every kind of failure."""
+    note = f'<p class="meta"><strong>{_h(error)}</strong></p>' if error else ""
     return shell(
-        "Review: sign-in needed",
-        f'<main class="plain"><h1>{said}</h1><p>This page is only for the owner and opens only '
-        f"from a signed link. {_GET_A_LINK}</p></main>",
+        "Review: sign in",
+        '<main class="plain"><h1>Sign in</h1>'
+        "<p>Use the same email and password as the admin panel.</p>"
+        f"{note}"
+        '<form method="post" action="/review/login" style="display:grid;gap:.7rem;max-width:22rem">'
+        '<input type="email" name="email" placeholder="Email" autocomplete="username" '
+        'required maxlength="254" style="font:inherit;padding:.6rem">'
+        '<input type="password" name="password" placeholder="Password" '
+        'autocomplete="current-password" required maxlength="200" '
+        'style="font:inherit;padding:.6rem">'
+        '<button type="submit" style="font:inherit;padding:.7rem">Sign in</button></form></main>',
+    )
+
+
+def login_unavailable() -> str:
+    return shell(
+        "Review: sign-in unavailable",
+        '<main class="plain"><h1>Sign-in is not available right now.</h1>'
+        "<p>The admin login could not be reached. Nothing was changed. Try again in a minute, or "
+        "use the newest link in your Telegram message.</p>"
+        '<p><a href="/review/login">Try again</a></p></main>',
     )
 
 
@@ -244,7 +276,9 @@ def _banner(done: Decided) -> str:
     return f'<div class="{css}" role="status"><b>Done: {_h(text)}.</b>{more}</div>'
 
 
-def review_page(view: DayReview, today_iso: str, csrf: str, done: Decided | None = None) -> str:
+def review_page(
+    view: DayReview, today_iso: str, csrf: str, done: Decided | None = None, who: str = ""
+) -> str:
     day = view.day.isoformat()
     before = (view.day - timedelta(days=1)).isoformat()
     after = (view.day + timedelta(days=1)).isoformat()
@@ -257,6 +291,12 @@ def review_page(view: DayReview, today_iso: str, csrf: str, done: Decided | None
         f'<a href="/review?day={after}">Later &rarr;</a>'
         '<form method="get" action="/review">'
         f'<input type="date" name="day" value="{day}" required><button>Go</button></form></nav>'
+    )
+    signed_in = (
+        f'<form method="post" action="/review/logout" class="meta">Signed in as {_h(who)} '
+        f'<input type="hidden" name="csrf" value="{_h(csrf)}"><button>Sign out</button></form>'
+        if who
+        else ""
     )
     summary = (
         f"{len(view.ideas)} idea{'s' if len(view.ideas) != 1 else ''}, {waiting} waiting for you"
@@ -272,7 +312,7 @@ def review_page(view: DayReview, today_iso: str, csrf: str, done: Decided | None
     )
     body = (
         f"<main><h1>{view.day:%A %d %B %Y}</h1>"
-        f'<div class="meta">Times are Berlin time. {_h(summary)}.</div>{nav}'
+        f'<div class="meta">Times are Berlin time. {_h(summary)}.</div>{nav}{signed_in}'
         f"{_banner(done) if done else ''}{everything}"
         + (
             "".join(_idea(i, csrf, day) for i in view.ideas)

@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Mapping
 
+from dk_publishing.adapters.auth.admin_login import login_url_ok
 from dk_publishing.domain import review as links
 
 _LOG = logging.getLogger("dk.review")
@@ -29,3 +30,20 @@ def review_settings(env: Mapping[str, str]) -> tuple[str, str] | None:
         _LOG.warning("review.public_base_url must start with https://: the review page is off.")
         return None
     return secret, links.clean_base(base)
+
+
+def admin_login_settings(env: Mapping[str, str]) -> tuple[str, frozenset[str]] | None:
+    """(the admin backend's login address, the emails allowed in), or None when email and password
+    sign-in is off: no address, no allowed email, or a bad address (said in the log, ADR 0026)."""
+    url = env.get("REVIEW_ADMIN_LOGIN_URL", "").strip()
+    allowed = frozenset(
+        e.strip().lower() for e in env.get("REVIEW_ALLOWED_EMAILS", "").split(",") if e.strip()
+    )
+    if not url or not allowed:
+        return None
+    if not login_url_ok(url):
+        _LOG.warning(
+            "review.admin_login_url must be an https address ending in /login: sign-in off."
+        )
+        return None
+    return url, allowed

@@ -11,9 +11,10 @@ from typing import Any
 
 import httpx
 
+from dk_publishing.adapters.auth.admin_login import AdminBackendLogin, login_url_ok
 from dk_publishing.adapters.clock import SystemClock
 from dk_publishing.adapters.config.platforms import ConfigError, Mode, load_platforms
-from dk_publishing.adapters.config.review import review_settings
+from dk_publishing.adapters.config.review import admin_login_settings, review_settings
 from dk_publishing.adapters.config.secrets_file import SecretsFile, split_ref
 from dk_publishing.adapters.config.sheet_layout import load_sheet_layout
 from dk_publishing.adapters.media.drive_catalog import DriveCatalog, sheet_modified_time
@@ -636,8 +637,15 @@ def build_review_services(
         if public is not None
         else None
     )
+    login = admin_login_settings(env)
     return ReviewServices(
-        core=api.core, secret=secret, base_url=base, tenant_id=api.tenant_id, preview=preview
+        core=api.core,
+        secret=secret,
+        base_url=base,
+        tenant_id=api.tenant_id,
+        preview=preview,
+        admin_login=AdminBackendLogin(login[0], transport) if login else None,
+        allowed_emails=login[1] if login else frozenset(),
     )
 
 
@@ -657,7 +665,12 @@ def review_link_maker(env: Mapping[str, str]) -> Callable[[date], str] | None:
 
 
 def init_review(
-    env: Mapping[str, str], base_url: str, *, rotate: bool = False
+    env: Mapping[str, str],
+    base_url: str,
+    *,
+    rotate: bool = False,
+    admin_login_url: str = "",
+    allow_emails: Sequence[str] = (),
 ) -> tuple[Path, bool]:
     """Write a fresh review secret (and the public address) into dk.json, never printing it.
     Returns (the file, whether a new secret was made). An existing secret is kept unless `rotate`:
@@ -674,6 +687,12 @@ def init_review(
     if made:
         section["secret"] = review_links.new_secret()
     section["public_base_url"] = base
+    if admin_login_url:
+        if not login_url_ok(admin_login_url) or not admin_login_url.startswith("https://"):
+            raise ConfigError("--admin-login-url must be an https address ending in /login")
+        section["admin_login_url"] = admin_login_url.strip()
+    if allow_emails:
+        section["allowed_emails"] = ",".join(sorted({e.strip().lower() for e in allow_emails}))
     file.update({"review": section})
     return path, made
 

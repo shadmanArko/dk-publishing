@@ -4,6 +4,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 
 from dk_publishing.application.ports import (
+    AdminLogin,
     Clock,
     MediaCatalog,
     MediaDisk,
@@ -74,3 +75,5 @@ class ReviewServices:
     base_url: str  # the public address the links point at
     tenant_id: str = "dk"
     preview: MediaPreview | None = None  # None: media is named but not shown
+    admin_login: AdminLogin | None = None  # None: only the signed link opens the page (ADR 0026)
+    allowed_emails: frozenset[str] = frozenset()  # who may sign in with email and password

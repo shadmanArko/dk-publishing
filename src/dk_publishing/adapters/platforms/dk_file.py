@@ -61,6 +61,8 @@ TEMPLATE: dict[str, Any] = {
         ),
         "secret": "",
         "public_base_url": "",
+        "admin_login_url": "",
+        "allowed_emails": "",
     },
     "telegram": {
         "_help": "Alerts and the morning digest. docs/setup/telegram.md",
@@ -104,6 +106,14 @@ _VALUES = {
     ("media", "work_dir"): "MEDIA_DIR",
     ("review", "secret"): "REVIEW_SECRET",  # signs review links; empty = no review page
     ("review", "public_base_url"): "REVIEW_BASE_URL",  # where those links point
+    (
+        "review",
+        "admin_login_url",
+    ): "REVIEW_ADMIN_LOGIN_URL",  # sign in with the admin panel login (ADR 0026)
+    (
+        "review",
+        "allowed_emails",
+    ): "REVIEW_ALLOWED_EMAILS",  # comma-separated; who may sign in that way
     ("mcp", "enabled"): "MCP_ENABLED",  # true: serve the MCP endpoint at /mcp/ (ADR 0024)
     ("mcp", "disabled_tools"): "MCP_DISABLED_TOOLS",  # comma-separated tool names to switch off
 }
