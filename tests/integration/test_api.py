@@ -35,7 +35,7 @@ class Rig:
         )
         self.client = TestClient(create_app(self.api))
         with self.api.core.uow() as uow:
-            for platform in ("instagram", "facebook", "threads", "youtube", "tiktok"):
+            for platform in ("instagram", "facebook", "threads", "youtube", "tiktok", "linkedin"):
                 uow.sync.add_account(TENANT, platform, "Dhaka Kacchi", uuid.uuid4().hex)
             uow.commit()
         self.keys = {
@@ -130,6 +130,7 @@ def test_platforms_tell_a_client_what_each_accepts(rig: Rig) -> None:
     assert [p["platform"] for p in data] == [
         "facebook",
         "instagram",
+        "linkedin",
         "threads",
         "tiktok",
         "youtube",

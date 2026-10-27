@@ -522,6 +522,9 @@ class Notifier(Protocol):
     def send_video(self, path: str, caption: str) -> None:
         """Deliver a video file with a short caption, or raise NotifyError."""
 
+    def send_photos(self, paths: Sequence[str], caption: str) -> None:
+        """Deliver one or more images (as one album) with a short caption, or raise NotifyError."""
+
 
 class AlertRepository(Protocol):
     def unsent_events(self, tenant_id: str, since: datetime, limit: int) -> list[AlertEvent]: ...

@@ -23,4 +23,8 @@ FACTS: dict[str, PlatformFacts] = {
         ("About 6 uploads a day (each upload uses about 1,600 of the daily API quota).",),
     ),
     "tiktok": PlatformFacts("TikTok Content Posting API."),
+    "linkedin": PlatformFacts(
+        "Handed to you on Telegram: caption ready to copy plus the images or video, and you post "
+        "it in LinkedIn. (LinkedIn's Community Management API is not used.)"
+    ),
 }

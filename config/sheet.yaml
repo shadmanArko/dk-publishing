@@ -68,6 +68,8 @@ platform_extras:
     - {name: title, kind: text, required: true}
     - {name: flair, kind: text}
     - {name: post_type, kind: dropdown, options: [text, link, image, video], required: true}
+  linkedin:
+    - {name: post_as, kind: dropdown, options: [page, profile], note: "Blank = the company Page. profile = you post it from your own profile (it usually reaches more people)."}
   tiktok:
     - {name: privacy_level, kind: dropdown, options: [public, friends, followers, only_me], required: true, note: "Always chosen per post, never defaulted."}
     - {name: allow_comments, kind: checkbox}

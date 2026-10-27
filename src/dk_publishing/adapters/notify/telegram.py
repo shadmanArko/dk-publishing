@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 import os
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -97,6 +97,8 @@ def _call(
 
 MAX_VIDEO_BYTES = 49 * 1024 * 1024  # Telegram bots may send files up to 50 MB
 MAX_CAPTION = 1024
+MAX_PHOTO_BYTES = 10 * 1024 * 1024  # Telegram bots may send photos up to 10 MB
+MAX_ALBUM = 10
 UPLOAD_TIMEOUT = httpx.Timeout(120.0, connect=10.0)
 
 
@@ -161,6 +163,45 @@ class TelegramNotifier:
                 {"video": (file.name, handle, "video/mp4")},
                 self._transport,
             )
+
+    def send_photos(self, paths: Sequence[str], caption: str) -> None:
+        files = [Path(p) for p in paths]
+        if not files or len(files) > MAX_ALBUM:
+            raise NotifyError(f"an album needs 1 to {MAX_ALBUM} images, got {len(files)}")
+        for file in files:
+            if not file.is_file():
+                raise NotifyError(f"the image {file.name} is missing")
+            if file.stat().st_size > MAX_PHOTO_BYTES:
+                raise NotifyError(f"{file.name} is over Telegram's 10 MB photo limit")
+        handles = [file.open("rb") for file in files]
+        try:
+            if len(files) == 1:
+                _upload(
+                    self._token,
+                    "sendPhoto",
+                    {"chat_id": self._chat, "caption": caption[:MAX_CAPTION], "parse_mode": "HTML"},
+                    {"photo": (files[0].name, handles[0])},
+                    self._transport,
+                )
+                return
+            media = [
+                {
+                    "type": "photo",
+                    "media": f"attach://p{i}",
+                    **({"caption": caption[:MAX_CAPTION], "parse_mode": "HTML"} if i == 0 else {}),
+                }
+                for i in range(len(files))
+            ]
+            _upload(
+                self._token,
+                "sendMediaGroup",
+                {"chat_id": self._chat, "media": json.dumps(media)},
+                {f"p{i}": (f.name, h) for i, (f, h) in enumerate(zip(files, handles, strict=True))},
+                self._transport,
+            )
+        finally:
+            for handle in handles:
+                handle.close()
 
     def identity(self) -> str:
         return str(_call(self._token, "getMe", {}, self._transport).get("username") or "?")

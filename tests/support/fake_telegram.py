@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from dk_publishing.application.ports import NotifyError
 
 
@@ -9,6 +11,7 @@ class FakeNotifier:
     def __init__(self) -> None:
         self.sent: list[str] = []
         self.videos: list[tuple[str, str]] = []  # (file name, caption)
+        self.photos: list[tuple[list[str], str]] = []  # (file names, caption)
         self.down = False
 
     def send(self, text: str) -> None:
@@ -20,3 +23,8 @@ class FakeNotifier:
         if self.down:
             raise NotifyError("could not reach Telegram (ConnectError)")
         self.videos.append((path.rsplit("/", 1)[-1], caption))
+
+    def send_photos(self, paths: Sequence[str], caption: str) -> None:
+        if self.down:
+            raise NotifyError("could not reach Telegram (ConnectError)")
+        self.photos.append(([p.rsplit("/", 1)[-1] for p in paths], caption))

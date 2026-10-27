@@ -29,7 +29,7 @@ def problems(tmp_path: Path, platform: str, data: dict[str, Any]) -> list[Any]:
 
 
 def test_every_platform_has_a_guide() -> None:
-    assert set(GUIDES) == {"instagram", "facebook", "threads", "youtube", "tiktok"}
+    assert set(GUIDES) == {"instagram", "facebook", "threads", "youtube", "tiktok", "linkedin"}
     assert MEDIA_PLACEHOLDER == "MEDIA_ID"
 
 
