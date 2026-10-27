@@ -66,8 +66,8 @@ You get every connected platform with its **formats, caption limits, file types,
 accounts**. This is the source of truth and is always current. Do this first, and again whenever a post is refused.
 One platform: `GET /v1/platforms/instagram`.
 
-Current platforms: `facebook`, `instagram`, `threads`, `youtube`, `tiktok`.
-`mode` says what happens: `live` = published for real, `assisted` = handed to the owner on Telegram to post by hand (TikTok).
+Current platforms: `facebook`, `instagram`, `threads`, `youtube`, `tiktok`, `linkedin`.
+`mode` says what happens: `live` = published for real, `assisted` = handed to the owner on Telegram to post by hand (TikTok, LinkedIn).
 
 ### Step 2: Upload each file once
 
@@ -225,6 +225,13 @@ Each is one variant. Put it inside `"variants": [ ... ]`. Replace `MEDIA_ID` wit
  "options":{"privacy_level":"public"}}
 ```
 
+**LinkedIn** (handed to the owner on Telegram at the slot; text, images or one video; put links in the first comment)
+
+```json
+{"platform":"linkedin","format":"image","caption":"A day in the kitchen.","media":["MEDIA_ID","MEDIA_ID"],"slot":"2026-12-20T12:00:00+01:00",
+ "options":{"post_as":"page"}}
+```
+
 **One idea, three platforms, one request**
 
 ```json
@@ -253,6 +260,9 @@ Each is one variant. Put it inside `"variants": [ ... ]`. Replace `MEDIA_ID` wit
 | threads `image` / `video` | 1 | optional, 500 | `reply_control` |
 | youtube `video` | 1 | none | `title`*, `made_for_kids`* (`yes`/`no`), `description`, `tags`, `category`, `visibility_after_publish`, `delivery` |
 | tiktok `video` | 1 `.mp4/.mov/.webm` | optional, 2,200 | `privacy_level`* (`public`/`friends`/`followers`/`only_me`), `allow_comments`, `allow_duet`, `allow_stitch`, `commercial_disclosure` |
+| linkedin `text` | none | **required**, 3,000 | `post_as` (`page`/`profile`) |
+| linkedin `image` | 1 to 9 `.jpg/.png/.gif` | optional, 3,000 | `post_as` |
+| linkedin `video` | 1 `.mp4/.mov` | optional, 3,000 | `post_as` |
 
 `delivery: "native"` makes Facebook or YouTube hold the post and publish it themselves (the slot must be at least 10
 minutes ahead). Default `direct` = this server publishes at the slot.

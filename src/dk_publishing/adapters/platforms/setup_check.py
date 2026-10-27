@@ -63,6 +63,7 @@ def check_setup(env: Mapping[str, str], platforms: Mapping[str, PlatformSettings
     _youtube(report, env, data)
     _telegram(report, env, data)
     _tiktok(report, env, data, platforms)
+    _linkedin(report, data)
     _media(report, data)
     _review(report, env, data)
     return report
@@ -161,6 +162,15 @@ def _tiktok(
         report.ok("tiktok: filled in (assisted: posts go to you on Telegram; docs/setup/tiktok.md)")
     else:
         report.skip("tiktok: nothing filled in (docs/setup/tiktok.md)")
+
+
+def _linkedin(report: SetupReport, data: dict[str, Any]) -> None:
+    if _filled(data.get("linkedin")):
+        report.ok(
+            "linkedin: filled in (assisted: posts go to you on Telegram; docs/setup/linkedin.md)"
+        )
+    else:
+        report.skip("linkedin: nothing filled in (docs/setup/linkedin.md)")
 
 
 def _review(report: SetupReport, env: Mapping[str, str], data: dict[str, Any]) -> None:

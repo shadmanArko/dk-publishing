@@ -1,6 +1,6 @@
 # DK Publishing API
 
-Schedule social posts (Instagram, Facebook, Threads, YouTube, TikTok) from software. You describe
+Schedule social posts (Instagram, Facebook, Threads, YouTube, TikTok, LinkedIn) from software. You describe
 each post per platform; the service validates it, keeps it as a draft until a person approves it
 (unless your key may approve), publishes it at the slot, and reports the result. A post is never
 published twice.
@@ -73,7 +73,8 @@ POST /v1/posts
 
 Rules of thumb (the authoritative, current numbers are always in GET /v1/platforms):
 - Each platform has its own formats, caption limit, media count and file types. YouTube has no
-  caption: use options.title and options.description. TikTok needs options.privacy_level.
+  caption: use options.title and options.description. TikTok needs options.privacy_level. LinkedIn: up to 3000 characters, links in the first
+  comment; options.post_as is page or profile.
 - One variant per platform+account. Omit "account" when only one is connected.
 - The slot must be at least a minute ahead. Times without an offset are refused.
 - Unknown fields are refused, so a typo is caught instead of silently ignored.

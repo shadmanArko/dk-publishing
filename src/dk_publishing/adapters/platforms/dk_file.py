@@ -81,6 +81,13 @@ TEMPLATE: dict[str, Any] = {
         "access_token": "",
         "refresh_token": "",
     },
+    "linkedin": {
+        "_help": (
+            "docs/setup/linkedin.md. `handle` is the Page or profile name (a label only: posts "
+            "are handed to you on Telegram)"
+        ),
+        "handle": "",
+    },
     "alerts": {
         "_help": "Optional dead-man's switch: a Healthchecks.io-style ping URL",
         "heartbeat_url": "",
@@ -143,6 +150,7 @@ def configured_accounts(env: Mapping[str, str]) -> list[tuple[str, str]]:
         ("threads", (meta.get("threads") or {}).get("user_id")),
         ("youtube", youtube.get("channel_id")),
         ("tiktok", (data.get("tiktok") or {}).get("handle")),
+        ("linkedin", (data.get("linkedin") or {}).get("handle")),
     ]
     return [(platform, str(ident).strip()) for platform, ident in found if str(ident or "").strip()]
 

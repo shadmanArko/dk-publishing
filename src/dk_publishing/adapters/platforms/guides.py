@@ -7,7 +7,7 @@ adapter fails the build.
 
 from __future__ import annotations
 
-from dk_publishing.adapters.platforms import facebook, instagram, threads, tiktok, youtube
+from dk_publishing.adapters.platforms import facebook, instagram, linkedin, threads, tiktok, youtube
 from dk_publishing.domain.guide import FieldGuide, FormatGuide, MediaGuide, PlatformGuide
 
 MEDIA = "MEDIA_ID"  # stands for an id returned by POST /v1/media
@@ -227,6 +227,48 @@ TIKTOK = PlatformGuide(
     ("Depending on how TikTok is set up here, the post may be handed to a person to publish.",),
 )
 
+_POST_AS = FieldGuide(
+    "post_as",
+    "choice",
+    choices=tuple(linkedin.POST_AS),
+    note="Which profile you post from. Blank = the company Page.",
+)
+
+LINKEDIN = PlatformGuide(
+    "linkedin",
+    "LinkedIn posts: text, one or more images, or one video.",
+    (
+        FormatGuide(
+            "text",
+            "A text-only post.",
+            MediaGuide(0, 0),
+            _text("caption", linkedin.MAX_CAPTION, required=True),
+            (_POST_AS,),
+            {"format": "text", "caption": "Why we cook kacchi the slow way."},
+        ),
+        FormatGuide(
+            "image",
+            "One image, or up to nine as a swipeable set.",
+            MediaGuide(1, linkedin.MAX_IMAGES, linkedin.IMAGE_TYPES, "4:5 portrait reads best."),
+            _text("caption", linkedin.MAX_CAPTION),
+            (_POST_AS,),
+            {"format": "image", "caption": "A day in the kitchen.", "media": [MEDIA, MEDIA]},
+        ),
+        FormatGuide(
+            "video",
+            "One video.",
+            MediaGuide(1, 1, linkedin.VIDEO_TYPES),
+            _text("caption", linkedin.MAX_CAPTION),
+            (_POST_AS,),
+            {"format": "video", "caption": "Opening the pot.", "media": [MEDIA]},
+        ),
+    ),
+    (
+        "The post is handed to a person to publish (a Telegram card).",
+        "Put links in the first comment: posts with links in the text reach fewer people.",
+    ),
+)
+
 GUIDES: dict[str, PlatformGuide] = {
-    g.platform: g for g in (INSTAGRAM, FACEBOOK, THREADS, YOUTUBE, TIKTOK)
+    g.platform: g for g in (INSTAGRAM, FACEBOOK, THREADS, YOUTUBE, TIKTOK, LINKEDIN)
 }

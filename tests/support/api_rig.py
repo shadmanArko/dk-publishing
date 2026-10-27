@@ -10,6 +10,7 @@ from dk_publishing.adapters.persistence.unit_of_work import PostgresUnitOfWork
 from dk_publishing.adapters.platforms.facebook import FacebookPublisher
 from dk_publishing.adapters.platforms.guides import GUIDES
 from dk_publishing.adapters.platforms.instagram import InstagramPublisher
+from dk_publishing.adapters.platforms.linkedin import build_linkedin
 from dk_publishing.adapters.platforms.meta import GraphClient
 from dk_publishing.adapters.platforms.registry import StaticPublisherRegistry
 from dk_publishing.adapters.platforms.threads import HOST, ThreadsPublisher
@@ -69,6 +70,7 @@ def publishers(tmp_path: Path, notifier: FakeNotifier | None = None) -> dict[str
             api=FakeYouTube(), capabilities=NATIVE_CAPS, sleep=lambda _: None
         ),
         "tiktok": build_tiktok(CAPS, notifier or FakeNotifier(), MemoryLog()),
+        "linkedin": build_linkedin(CAPS, notifier or FakeNotifier(), MemoryLog()),
     }
 
 

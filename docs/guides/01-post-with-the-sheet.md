@@ -54,6 +54,7 @@ It never posts the same thing twice.
 | Threads | `text` / `image` / `video` | none / 1 photo / 1 video |
 | YouTube | `video` | 1 video |
 | TikTok | (video) | 1 video |
+| LinkedIn | `text` / `image` / `video` | none / 1 to 9 images / 1 video; handed to you on Telegram |
 
 The dropdowns also list Facebook `reel` and Threads `carousel`. They are **not supported yet**: pick Facebook `video` or Threads `image`.
 
@@ -74,7 +75,7 @@ Carousel example for `media`: `04_01.jpg, 04_02.jpg, 04_03.jpg`.
 
 ## Step 3: Say where it goes: one row per platform
 
-Open the tab of each platform you want (**Facebook**, **Instagram**, **Threads**, **YouTube**, **TikTok**). Add one row per post. The columns on every platform tab:
+Open the tab of each platform you want (**Facebook**, **Instagram**, **Threads**, **YouTube**, **TikTok**, **LinkedIn**). Add one row per post. The columns on every platform tab:
 
 | Column | What to do |
 | --- | --- |
@@ -100,6 +101,9 @@ Then fill the platform's own columns:
 
 **TikTok**
 `privacy_level` = `public` (you must choose it every time)
+
+**LinkedIn**
+`post_as` = `page` (the company Page, the default) or `profile` (you post it from your own profile)
 
 **Threads**
 `format` = `image` (or `text` / `video`)
